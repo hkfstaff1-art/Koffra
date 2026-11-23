@@ -20,7 +20,10 @@ class SecurityHeaders
         $response = $next($request);
 
         $headers = $response->headers;
-        $headers->set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+        // CSP la plus stricte par défaut ; l'application React fournit la sienne (SpaController).
+        if (! $headers->has('Content-Security-Policy')) {
+            $headers->set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+        }
         $headers->set('X-Content-Type-Options', 'nosniff');
         $headers->set('X-Frame-Options', 'DENY');
         $headers->set('Referrer-Policy', 'no-referrer');

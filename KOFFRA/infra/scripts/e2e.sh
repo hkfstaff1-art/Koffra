@@ -14,7 +14,7 @@ TOKEN="$(php artisan koffra:install | grep -o 'installation#[A-Za-z0-9_-]*' | cu
 
 php artisan serve --port="$PORT" >/dev/null 2>&1 &
 SERVER=$!
-trap 'kill $SERVER 2>/dev/null || true; php artisan migrate:fresh --force >/dev/null' EXIT
+trap 'kill $SERVER 2>/dev/null || true; (cd "$ROOT/backend" && php artisan migrate:fresh --force >/dev/null)' EXIT
 for _ in $(seq 1 30); do curl -sf "http://127.0.0.1:$PORT/up" >/dev/null && break; sleep 1; done
 
 cd "$ROOT/frontend"

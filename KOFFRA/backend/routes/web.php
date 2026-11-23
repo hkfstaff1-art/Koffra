@@ -1,6 +1,10 @@
 <?php
 
+use App\Http\Controllers\SpaController;
 use Illuminate\Support\Facades\Route;
 
-// Le backend est une API pure : l'interface est servie par le frontend React.
-Route::get('/', fn () => response()->json(['service' => 'koffra-api']));
+// Application React (routes côté client). Les fichiers statiques (assets, sw.js…) sont servis
+// directement par le serveur web ; /api, /sanctum et /up restent gérés par Laravel.
+Route::get('/{path?}', SpaController::class)
+    ->where('path', '^(?!api/|api$|sanctum/|up$).*$')
+    ->name('spa');

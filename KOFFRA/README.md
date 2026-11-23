@@ -19,6 +19,7 @@ Ouvrir le dossier racine `KOFFRA` dans OpenCode et lui demander de lire `docs/08
 - [x] Étape 4 — API du coffre : entrées chiffrées (révisions anti-écrasement), catégories à nom chiffré, favoris, archivage, corbeille, pièces jointes chiffrées, rotation de clé, export chiffré.
 - [x] Étape 5 — interface React : installation, connexion + code, déverrouillage, coffre (recherche locale, filtres, détail, édition, pièces jointes), catégories, générateur, appareils, administrateurs (empreinte), journal, paramètres (mot de passe, clé de récupération, export/import chiffrés, rotation, verrouillage auto).
 - [x] Étape 6 — test de bout en bout réel (`npm run test:e2e`) : chiffrement réel + API réelle, installation, entrée, pièce jointe, invitation avec empreinte, rotation, export.
+- [x] Étape 7 — PWA (service worker limité au shell, aucune réponse API en cache), application servie par Laravel sur le même domaine avec CSP stricte (`wasm-unsafe-eval` seul), en-têtes Apache, script `infra/scripts/build-release.sh`.
 - [ ] Étapes suivantes : voir `docs/07-plan-de-realisation.md`.
 
 ## Décisions validées

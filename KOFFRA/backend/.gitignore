@@ -25,3 +25,13 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Build du frontend copié par infra/scripts/build-release.sh (jamais versionné)
+/public/assets
+/public/brand
+/public/spa.html
+/public/sw.js
+/public/registerSW.js
+/public/workbox-*.js
+/public/manifest.webmanifest
+/public/*.png
