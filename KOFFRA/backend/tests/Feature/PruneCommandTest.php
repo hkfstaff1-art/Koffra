@@ -36,6 +36,17 @@ class PruneCommandTest extends TestCase
         $this->assertModelExists($approved);
     }
 
+    public function test_status_reports_scheduler_heartbeat(): void
+    {
+        $this->artisan('koffra:status')->assertFailed();
+
+        $this->artisan('schedule:run')->assertSuccessful();
+        $this->artisan('koffra:status')->assertSuccessful();
+
+        $this->travel(10)->minutes();
+        $this->artisan('koffra:status')->assertFailed();
+    }
+
     public function test_prune_is_scheduled_daily(): void
     {
         $events = collect(app(Schedule::class)->events())->map->command->implode(' ');
