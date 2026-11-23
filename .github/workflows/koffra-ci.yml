@@ -1,0 +1,73 @@
+# CI KOFFRA : tests backend (SQLite + MySQL 8) et frontend à chaque push / pull request.
+name: KOFFRA CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: KOFFRA/backend
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: koffra_test
+          MYSQL_USER: koffra
+          MYSQL_PASSWORD: ci_only
+          MYSQL_ROOT_PASSWORD: ci_root_only
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci_root_only"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: sodium, pdo_mysql, pdo_sqlite, mbstring
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: cp .env.example .env && php artisan key:generate
+      - name: Style (Pint)
+        run: composer lint
+      - name: Tests (SQLite)
+        run: php artisan test
+      - name: Tests (MySQL 8)
+        run: php artisan test
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: koffra_test
+          DB_USERNAME: koffra
+          DB_PASSWORD: ci_only
+      - name: Audit des dépendances
+        run: composer audit
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: KOFFRA/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: KOFFRA/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Audit des dépendances
+        run: npm audit --audit-level=high

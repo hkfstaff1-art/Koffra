@@ -1,0 +1,37 @@
+# KOFFRA — services de développement local (NE PAS utiliser en production).
+# Démarrage : docker compose -f infra/docker-compose.yml up -d
+#   - MySQL 8.4 : 127.0.0.1:3306 (base/utilisateur koffra)
+#   - Mailpit   : SMTP 127.0.0.1:1025, interface web http://localhost:8025 (réception des OTP de dev)
+# Les mots de passe ci-dessous sont des valeurs de développement, jamais à réutiliser.
+
+name: koffra-dev
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: koffra
+      MYSQL_USER: koffra
+      MYSQL_PASSWORD: koffra_dev_only
+      MYSQL_ROOT_PASSWORD: root_dev_only
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - koffra_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot_dev_only"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+
+volumes:
+  koffra_mysql:
