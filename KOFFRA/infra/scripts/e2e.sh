@@ -9,12 +9,15 @@ cd "$ROOT/backend"
 if grep -q '^APP_ENV=production' .env; then echo "Refusé : APP_ENV=production" >&2; exit 1; fi
 
 php artisan migrate:fresh --force >/dev/null
-rm -f storage/logs/mail-dev.log
+rm -rf storage/logs/mail-dev.log storage/app/private/attachments
 TOKEN="$(php artisan koffra:install | grep -o 'installation#[A-Za-z0-9_-]*' | cut -d'#' -f2)"
 
-php artisan serve --port="$PORT" >/dev/null 2>&1 &
+# Emails forcés dans storage/logs/mail-dev.log pour ce test (le .env peut pointer vers un vrai SMTP).
+# Serveur PHP intégré lancé directement : « artisan serve » ne transmet pas ces variables.
+(cd public && MAIL_MAILER=log MAIL_LOG_CHANNEL=maildev \
+  exec php -S "127.0.0.1:$PORT" ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php >/dev/null 2>&1) &
 SERVER=$!
-trap 'kill $SERVER 2>/dev/null || true; (cd "$ROOT/backend" && php artisan migrate:fresh --force >/dev/null)' EXIT
+trap 'kill $SERVER 2>/dev/null || true; (cd "$ROOT/backend" && php artisan migrate:fresh --force >/dev/null && rm -rf storage/app/private/attachments storage/logs/mail-dev.log)' EXIT
 for _ in $(seq 1 30); do curl -sf "http://127.0.0.1:$PORT/up" >/dev/null && break; sleep 1; done
 
 cd "$ROOT/frontend"
