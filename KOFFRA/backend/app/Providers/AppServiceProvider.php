@@ -30,7 +30,9 @@ class AppServiceProvider extends ServiceProvider
     /** Refuse de démarrer en production avec une configuration dangereuse. */
     private function guardProductionConfiguration(): void
     {
-        if (! $this->app->isProduction()) {
+        // Contrôle limité aux requêtes web : en ligne de commande (composer install, package:discover,
+        // config:cache…) le .env peut ne pas encore exister pendant un build ou un déploiement.
+        if (! $this->app->isProduction() || $this->app->runningInConsole()) {
             return;
         }
 
