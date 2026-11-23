@@ -18,6 +18,7 @@ Ouvrir le dossier racine `KOFFRA` dans OpenCode et lui demander de lire `docs/08
 - [x] Étape 3 — installation du propriétaire (`php artisan koffra:install`), connexion + OTP email, appareils, réauthentification, invitations (5 comptes max), partage scellé de la clé du coffre, désactivation, changement de mot de passe, récupération, journal ; contrat `docs/openapi.yaml`.
 - [x] Étape 4 — API du coffre : entrées chiffrées (révisions anti-écrasement), catégories à nom chiffré, favoris, archivage, corbeille, pièces jointes chiffrées, rotation de clé, export chiffré.
 - [x] Étape 5 — interface React : installation, connexion + code, déverrouillage, coffre (recherche locale, filtres, détail, édition, pièces jointes), catégories, générateur, appareils, administrateurs (empreinte), journal, paramètres (mot de passe, clé de récupération, export/import chiffrés, rotation, verrouillage auto).
+- [x] Étape 6 — test de bout en bout réel (`npm run test:e2e`) : chiffrement réel + API réelle, installation, entrée, pièce jointe, invitation avec empreinte, rotation, export.
 - [ ] Étapes suivantes : voir `docs/07-plan-de-realisation.md`.
 
 ## Décisions validées

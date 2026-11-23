@@ -10,7 +10,8 @@
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "bash ../infra/scripts/e2e.sh"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.108.3",
