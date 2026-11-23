@@ -32,6 +32,9 @@ class SpaServingTest extends TestCase
         foreach (['/', '/connexion', '/coffre/123', '/installation'] as $path) {
             $response = $this->get($path)->assertOk()->assertSee('KOFFRA test', false);
             $response->assertHeader('Content-Security-Policy', SpaController::CSP);
+            // Régression : avec « no-referrer », Sanctum ne reconnaît pas les GET de l'application
+            // (ni Referer ni Origin) et la session est perdue à chaque rechargement.
+            $response->assertHeader('Referrer-Policy', 'same-origin');
             $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
         }
 

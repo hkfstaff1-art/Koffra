@@ -25,7 +25,7 @@ class ApiFoundationTest extends TestCase
         $response->assertHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('X-Frame-Options', 'DENY')
-            ->assertHeader('Referrer-Policy', 'no-referrer');
+            ->assertHeader('Referrer-Policy', 'same-origin');
 
         $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
         // HSTS seulement en HTTPS

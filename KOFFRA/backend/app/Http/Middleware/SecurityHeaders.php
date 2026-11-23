@@ -26,7 +26,8 @@ class SecurityHeaders
         }
         $headers->set('X-Content-Type-Options', 'nosniff');
         $headers->set('X-Frame-Options', 'DENY');
-        $headers->set('Referrer-Policy', 'no-referrer');
+        // same-origin : Sanctum reconnaît l'application par son Referer ; jamais envoyé à un site tiers.
+        $headers->set('Referrer-Policy', 'same-origin');
         $headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
         $headers->set('Cross-Origin-Opener-Policy', 'same-origin');
         $headers->set('Cross-Origin-Resource-Policy', 'same-site');
