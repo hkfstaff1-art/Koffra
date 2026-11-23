@@ -2,24 +2,20 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
+/**
+ * KOFFRA ne crée aucun compte ni aucune donnée par seeder : les clés sont générées
+ * dans le navigateur (chiffrement de bout en bout), un seeder serveur ne peut donc pas
+ * produire de compte utilisable sans manipuler de secrets.
+ *
+ * Premier propriétaire : `php artisan koffra:install` puis le lien d'initialisation affiché.
+ * Données de démonstration : à saisir depuis l'interface sur un environnement de test.
+ */
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        $this->command?->info('Aucune donnée à initialiser. Utilisez « php artisan koffra:install ».');
     }
 }

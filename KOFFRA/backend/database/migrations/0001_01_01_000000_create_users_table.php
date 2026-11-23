@@ -4,27 +4,32 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/*
+| Comptes administrateurs KOFFRA (docs/05, docs/09).
+| `password` contient le hachage Argon2id de l'authKey dérivée côté client :
+| le mot de passe réel de l'utilisateur n'est jamais transmis au serveur.
+| Le matériel cryptographique (kdf_params, enveloppes, clé publique) ne contient aucun secret en clair.
+*/
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->uuid('uuid')->unique();
+            $table->string('name', 120);
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
-            $table->rememberToken();
+            $table->string('status', 20)->default('active')->index(); // active | disabled
+            $table->json('kdf_params');
+            $table->json('encrypted_user_key');
+            $table->string('public_key', 64);
+            $table->json('encrypted_private_key');
+            $table->foreignId('invited_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('last_login_at')->nullable();
+            $table->timestamp('disabled_at')->nullable();
             $table->timestamps();
-        });
-
-        Schema::create('password_reset_tokens', function (Blueprint $table) {
-            $table->string('email')->primary();
-            $table->string('token');
-            $table->timestamp('created_at')->nullable();
         });
 
         Schema::create('sessions', function (Blueprint $table) {
@@ -37,13 +42,9 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
+        Schema::dropIfExists('users');
     }
 };
