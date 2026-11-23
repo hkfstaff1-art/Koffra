@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\EnsureTrustedDevice;
+use App\Http\Middleware\RequireRecentReauth;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -18,6 +20,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Authentification SPA par cookie de session (HttpOnly) : pas de token en localStorage.
         $middleware->statefulApi();
         $middleware->append(SecurityHeaders::class);
+        $middleware->alias([
+            'trusted.device' => EnsureTrustedDevice::class,
+            'reauth' => RequireRecentReauth::class,
+        ]);
+        // Le cookie d'appareil est chiffré par Laravel (EncryptCookies) : valeur illisible côté client.
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

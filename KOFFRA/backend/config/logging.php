@@ -65,6 +65,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // DÉVELOPPEMENT UNIQUEMENT : emails (codes OTP) écrits dans un fichier dédié.
+        // Interdit en production (contrôle dans AppServiceProvider).
+        'maildev' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/mail-dev.log'),
+            'level' => 'debug',
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),

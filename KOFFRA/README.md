@@ -15,6 +15,7 @@ Ouvrir le dossier racine `KOFFRA` dans OpenCode et lui demander de lire `docs/08
 - [x] Étape 0 — socle : API Laravel 13 (`/api/v1`, cookies de session Sanctum, CORS, en-têtes de sécurité), frontend React/TS/Vite, docker-compose de dev, CI.
 - [x] Étape 1 — conception cryptographique (`docs/09`) + module crypto frontend (`frontend/src/crypto`, 35 tests).
 - [x] Étape 2 — modèle de données (13 tables métier, `docs/10`), testé sur MySQL 8.4 et MariaDB 11.4.
+- [x] Étape 3 — installation du propriétaire (`php artisan koffra:install`), connexion + OTP email, appareils, réauthentification, invitations (5 comptes max), partage scellé de la clé du coffre, désactivation, changement de mot de passe, récupération, journal ; contrat `docs/openapi.yaml`.
 - [ ] Étapes suivantes : voir `docs/07-plan-de-realisation.md`.
 
 ## Décisions validées

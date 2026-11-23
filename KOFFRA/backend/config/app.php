@@ -54,6 +54,9 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // URL publique du frontend (liens d'invitation / d'installation). Première valeur de FRONTEND_URL.
+    'frontend_url' => trim(explode(',', (string) env('FRONTEND_URL', 'http://localhost:5173'))[0]),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

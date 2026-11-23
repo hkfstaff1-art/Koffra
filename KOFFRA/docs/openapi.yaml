@@ -1,0 +1,305 @@
+openapi: 3.1.0
+info:
+  title: KOFFRA API
+  version: 1.0.0
+  description: |
+    API du coffre-fort KOFFRA. Toutes les données du coffre sont chiffrées côté navigateur
+    (docs/09) : le serveur ne reçoit et ne renvoie que du matériel chiffré.
+
+    **Authentification** : cookie de session HttpOnly (Sanctum SPA, même origine).
+    Avant toute requête POST/PUT/PATCH/DELETE : `GET /sanctum/csrf-cookie`, puis renvoyer
+    le cookie `XSRF-TOKEN` dans l'en-tête `X-XSRF-TOKEN`.
+
+    **Réauthentification** : les routes marquées `reauth` exigent `POST /auth/reauth` dans les
+    5 minutes précédentes (sinon 403 `reauth_required`). La réauthentification est consommée
+    par l'action sensible.
+
+    **Erreurs** : `{ "message": "...", "code": "..." }` ; validation : 422 avec `errors`.
+    Limitation de débit : 429.
+servers:
+  - url: /api/v1
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: koffra-session
+  schemas:
+    B64Key:
+      type: string
+      description: 32 octets en base64url sans padding
+      pattern: '^[A-Za-z0-9_-]{43}$'
+    Envelope:
+      type: object
+      required: [v, n, c]
+      properties:
+        v: { type: integer, enum: [1] }
+        n: { type: string, description: 'nonce XChaCha20 (24 octets) base64url', pattern: '^[A-Za-z0-9_-]{32}$' }
+        c: { type: string, description: 'ciphertext + tag Poly1305, base64url' }
+    KdfParams:
+      type: object
+      required: [alg, ops, mem, salt]
+      properties:
+        alg: { type: string, enum: [argon2id13] }
+        ops: { type: integer, minimum: 2, maximum: 10 }
+        mem: { type: integer, minimum: 19922944, description: octets }
+        salt: { type: string, pattern: '^[A-Za-z0-9_-]{22}$' }
+    RecoveryMaterial:
+      type: object
+      required: [auth_key, encrypted_user_key, fingerprint]
+      properties:
+        auth_key: { $ref: '#/components/schemas/B64Key' }
+        encrypted_user_key: { $ref: '#/components/schemas/Envelope' }
+        fingerprint: { type: string, pattern: '^[0-9a-f]{32}$' }
+    AccountMaterial:
+      type: object
+      required: [auth_key, public_key, kdf_params, encrypted_user_key, encrypted_private_key, recovery]
+      properties:
+        auth_key: { $ref: '#/components/schemas/B64Key' }
+        public_key: { $ref: '#/components/schemas/B64Key' }
+        kdf_params: { $ref: '#/components/schemas/KdfParams' }
+        encrypted_user_key: { $ref: '#/components/schemas/Envelope' }
+        encrypted_private_key: { $ref: '#/components/schemas/Envelope' }
+        recovery: { $ref: '#/components/schemas/RecoveryMaterial' }
+    Me:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            uuid: { type: string, format: uuid }
+            name: { type: string }
+            email: { type: string }
+            status: { type: string, enum: [active, disabled] }
+            last_login_at: { type: [string, 'null'], format: date-time }
+        device:
+          type: [object, 'null']
+          properties: { uuid: { type: string }, label: { type: string } }
+        keys:
+          type: object
+          properties:
+            kdf_params: { $ref: '#/components/schemas/KdfParams' }
+            encrypted_user_key: { $ref: '#/components/schemas/Envelope' }
+            public_key: { $ref: '#/components/schemas/B64Key' }
+            encrypted_private_key: { $ref: '#/components/schemas/Envelope' }
+            current_vault_key_version: { type: [integer, 'null'] }
+            vault_key_grants:
+              type: array
+              items:
+                type: object
+                properties:
+                  key_version: { type: integer }
+                  type: { type: string, enum: [confirmed, sealed] }
+                  encrypted_key:
+                    description: Envelope si `confirmed`, chaîne base64url (sealed box) si `sealed`
+        limits:
+          type: object
+          properties: { max_accounts: { type: integer }, used_seats: { type: integer } }
+    OtpRequired:
+      type: object
+      properties:
+        otp_required: { type: boolean, const: true }
+        challenge: { type: string, format: uuid }
+        destination: { type: string, example: 'o***@e***.com' }
+        expires_at: { type: string, format: date-time }
+    Error:
+      type: object
+      properties: { message: { type: string }, code: { type: string } }
+
+security:
+  - session: []
+
+paths:
+  /health:
+    get: { summary: État de l'API, security: [], responses: { '200': { description: OK } } }
+
+  /setup/status:
+    get:
+      summary: KOFFRA est-il initialisé ?
+      security: []
+      responses: { '200': { description: '{ installed: boolean }' } }
+  /setup/start:
+    post:
+      summary: Initialisation du propriétaire — étape 1 (jeton CLI + envoi d'un code à l'email)
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, name, email]
+              properties: { token: { $ref: '#/components/schemas/B64Key' }, name: { type: string }, email: { type: string, format: email } }
+      responses:
+        '200': { description: '{ user_uuid, destination, kdf_defaults } — user_uuid sert aux données associées' }
+        '422': { description: setup_token_invalid }
+  /setup/complete:
+    post:
+      summary: Initialisation — étape 2 (code + matériel du compte + clé du coffre v1)
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/AccountMaterial'
+                - type: object
+                  required: [code, device_label, vault_key]
+                  properties:
+                    code: { type: string, pattern: '^[0-9]{6}$' }
+                    device_label: { type: string }
+                    vault_key: { $ref: '#/components/schemas/Envelope' }
+      responses:
+        '201': { description: Session ouverte, cookie d'appareil posé, content: { application/json: { schema: { $ref: '#/components/schemas/Me' } } } }
+        '422': { description: otp_invalid | setup_expired | setup_token_invalid }
+
+  /auth/prelogin:
+    post:
+      summary: Paramètres Argon2id d'un email (factices et stables si le compte n'existe pas)
+      security: []
+      requestBody: { content: { application/json: { schema: { type: object, properties: { email: { type: string } } } } } }
+      responses: { '200': { description: '{ kdf_params }' } }
+  /auth/login:
+    post:
+      summary: Connexion par authKey. Nouvel appareil → code OTP envoyé à l'email du compte.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, auth_key, device_label]
+              properties: { email: { type: string }, auth_key: { $ref: '#/components/schemas/B64Key' }, device_label: { type: string } }
+      responses:
+        '200': { description: Appareil déjà approuvé — session ouverte, content: { application/json: { schema: { $ref: '#/components/schemas/Me' } } } }
+        '202': { description: OTP requis, content: { application/json: { schema: { $ref: '#/components/schemas/OtpRequired' } } } }
+        '422': { description: invalid_credentials (réponse identique que le compte existe ou non) }
+        '429': { description: Trop de tentatives (5/min par email) }
+  /auth/otp/verify:
+    post:
+      summary: Valide le code (même navigateur que /auth/login) et approuve l'appareil
+      security: []
+      requestBody: { content: { application/json: { schema: { type: object, properties: { challenge: { type: string, format: uuid }, code: { type: string } } } } } }
+      responses:
+        '200': { description: Session ouverte, content: { application/json: { schema: { $ref: '#/components/schemas/Me' } } } }
+        '422': { description: 'otp_invalid (+ remaining_attempts)' }
+  /auth/otp/resend:
+    post:
+      summary: Renvoie un code (délai minimal 60 s)
+      security: []
+      responses: { '202': { description: Nouveau défi }, '429': { description: otp_cooldown } }
+  /auth/logout:
+    post: { summary: Déconnexion, responses: { '200': { description: OK } } }
+  /auth/reauth:
+    post:
+      summary: Réauthentification (valable 5 minutes, pour une action sensible)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { auth_key: { $ref: '#/components/schemas/B64Key' } } } } } }
+      responses: { '200': { description: '{ reauth_valid_until }' }, '422': { description: invalid_credentials } }
+
+  /me:
+    get:
+      summary: Profil + matériel cryptographique pour déverrouiller le coffre
+      responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Me' } } } }, '401': { description: session_revoked } }
+  /me/password:
+    put:
+      summary: '[reauth] Changement de mot de passe (nouvelle authKey + enveloppe userKey) ; autres sessions fermées'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                auth_key: { $ref: '#/components/schemas/B64Key' }
+                kdf_params: { $ref: '#/components/schemas/KdfParams' }
+                encrypted_user_key: { $ref: '#/components/schemas/Envelope' }
+      responses: { '200': { description: OK }, '403': { description: reauth_required } }
+  /me/recovery-key:
+    post:
+      summary: '[reauth] Nouvelle clé de récupération (l''ancienne est révoquée)'
+      requestBody: { content: { application/json: { schema: { type: object, properties: { recovery: { $ref: '#/components/schemas/RecoveryMaterial' } } } } } }
+      responses: { '200': { description: OK } }
+
+  /devices:
+    get: { summary: Mes appareils approuvés, responses: { '200': { description: '{ data: [{ uuid, label, approved_at, last_seen_at, last_ip, revoked_at, current }] }' } } }
+  /devices/{uuid}:
+    delete:
+      summary: Révoque un de mes appareils (effet à la requête suivante)
+      parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: OK }, '404': { description: Pas un de mes appareils } }
+  /devices/logout-others:
+    post: { summary: Ferme toutes mes autres sessions, responses: { '200': { description: OK } } }
+
+  /recovery/start:
+    post:
+      summary: Récupération — preuve de la clé de récupération ; réponse générique, code envoyé si valide
+      security: []
+      requestBody: { content: { application/json: { schema: { type: object, properties: { email: { type: string }, recovery_auth_key: { $ref: '#/components/schemas/B64Key' } } } } } }
+      responses: { '202': { description: '{ challenge, destination, message }' } }
+  /recovery/verify:
+    post:
+      summary: Récupération — code email ; renvoie les enveloppes à ouvrir localement
+      security: []
+      responses: { '200': { description: '{ user_uuid, encrypted_user_key_by_recovery, public_key, encrypted_private_key }' }, '422': { description: otp_invalid } }
+  /recovery/complete:
+    post:
+      summary: Récupération — nouveau mot de passe + nouvelle clé de récupération ; toutes les sessions fermées
+      security: []
+      responses: { '200': { description: Session ouverte }, '422': { description: recovery_expired } }
+
+  /admins:
+    get: { summary: 'Admins (uuid, nom, email, statut, clé publique, accès coffre)', responses: { '200': { description: OK } } }
+  /admins/{uuid}:
+    delete:
+      summary: '[reauth] Désactive un admin (sessions, appareils, accès coffre retirés)'
+      parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: '{ rotation_recommended: true }' } }
+  /admins/{uuid}/vault-grant:
+    post:
+      summary: '[reauth] Scelle la clé du coffre pour la clé publique d''un admin (après vérification hors bande de l''empreinte)'
+      parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { key_version: { type: integer }, sealed_key: { type: string, pattern: '^[A-Za-z0-9_-]{112}$' } } } } } }
+      responses: { '201': { description: OK } }
+  /vault-grants/confirm:
+    post:
+      summary: Confirme mon accès scellé en le ré-enveloppant avec ma userKey
+      requestBody: { content: { application/json: { schema: { type: object, properties: { key_version: { type: integer }, encrypted_key: { $ref: '#/components/schemas/Envelope' } } } } } }
+      responses: { '200': { description: OK }, '422': { description: no_pending_grant } }
+
+  /invitations:
+    get: { summary: Invitations en cours, responses: { '200': { description: OK } } }
+    post:
+      summary: '[reauth] Invite un admin (5 comptes max, invitations comprises)'
+      requestBody: { content: { application/json: { schema: { type: object, properties: { email: { type: string } } } } } }
+      responses: { '201': { description: OK }, '422': { description: seat_limit | email_taken } }
+  /invitations/{uuid}:
+    delete:
+      summary: '[reauth] Annule une invitation'
+      parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: OK } }
+  /invitations/accept/start:
+    post:
+      summary: Invité — ouvre le lien (jeton du fragment #) ; reçoit l'UUID de son compte
+      security: []
+      responses: { '200': { description: '{ email, invited_by, user_uuid, kdf_defaults }' }, '422': { description: invitation_invalid } }
+  /invitations/accept:
+    post:
+      summary: Invité — crée son compte (ses propres clés) ; accès au coffre en attente
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/AccountMaterial'
+                - type: object
+                  properties: { name: { type: string }, device_label: { type: string } }
+      responses: { '201': { description: Session ouverte } }
+
+  /activity:
+    get:
+      summary: Journal d'activité paginé (sans aucune valeur secrète)
+      parameters:
+        - { name: event, in: query, schema: { type: string } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 10, maximum: 100 } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses: { '200': { description: '{ data: [...], meta: { current_page, last_page, total } }' } }
