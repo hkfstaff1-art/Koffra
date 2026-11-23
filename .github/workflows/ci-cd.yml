@@ -1,0 +1,244 @@
+# KOFFRA — intégration et déploiement continus (schéma HKF STAFF, docs/11).
+#
+#  push / pull request  →  jobs « tests » (backend MariaDB 11.8 + frontend)
+#  push sur main        →  job « deploy » (uniquement si les tests passent) → Hostinger par SSH + rsync
+#
+# Monorepo : application Laravel dans KOFFRA/backend, frontend React dans KOFFRA/frontend.
+# Le build du frontend est copié dans backend/public (index.html → spa.html, servi par Laravel).
+name: CI / CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Tests backend (MariaDB 11.8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: KOFFRA/backend
+
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: koffra_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s --health-timeout=5s --health-retries=12
+
+    env:
+      DB_CONNECTION: mariadb
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: koffra_test
+      DB_USERNAME: root
+      DB_PASSWORD: root
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Le serveur n'a pas l'extension sodium : on teste sans (le chiffrement est côté navigateur).
+      - name: PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, mbstring, intl, fileinfo, :sodium
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ hashFiles('KOFFRA/backend/composer.lock') }}
+
+      - name: Dépendances PHP
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Environnement de test
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Formatage (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Tests
+        run: php artisan test
+
+      - name: Audit des dépendances
+        run: composer audit --no-dev
+
+  frontend:
+    name: Tests frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: KOFFRA/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: KOFFRA/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Audit des dépendances (livrées)
+        run: npm audit --omit=dev --audit-level=high
+
+  deploy:
+    name: Déploiement Hostinger
+    needs: [backend, frontend]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      PHP_BIN: ${{ vars.PHP_BIN || 'php' }}
+      APP_URL: ${{ vars.APP_URL }}
+
+    steps:
+      - name: Vérifier la configuration
+        id: config
+        env:
+          HAS_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY != '' }}
+          HAS_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS != '' }}
+        run: |
+          missing=""
+          for name in SSH_HOST SSH_PORT SSH_USER DEPLOY_PATH; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          [ "$HAS_PRIVATE_KEY" = "true" ] || missing="$missing SSH_PRIVATE_KEY"
+          [ "$HAS_KNOWN_HOSTS" = "true" ] || missing="$missing SSH_KNOWN_HOSTS"
+          if [ -n "$missing" ]; then
+            echo "::warning title=Déploiement ignoré::Secrets manquants :$missing (voir KOFFRA/docs/11)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.ready == 'true'
+
+      - name: PHP 8.4
+        if: steps.config.outputs.ready == 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, intl, fileinfo
+          coverage: none
+          tools: composer:v2
+
+      - name: Node 24
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: KOFFRA/frontend/package-lock.json
+
+      - name: Build de production (frontend copié dans backend/public)
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          cd KOFFRA/frontend
+          npm ci
+          npm run build
+          PUB=../backend/public
+          cp -r dist/assets dist/brand "$PUB/"
+          cp dist/sw.js dist/registerSW.js dist/workbox-*.js dist/manifest.webmanifest dist/*.png "$PUB/"
+          cp dist/index.html "$PUB/spa.html"
+          cd ../backend
+          composer install --no-dev --no-interaction --prefer-dist --no-progress --optimize-autoloader
+
+      - name: Clé SSH
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          echo "SSH=ssh -i $HOME/.ssh/deploy_key -p $SSH_PORT -o StrictHostKeyChecking=yes -o BatchMode=yes" >> "$GITHUB_ENV"
+
+      - name: Prérequis serveur (.env présent, version de PHP)
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          $SSH "$SSH_USER@$SSH_HOST" "set -e
+            mkdir -p '$DEPLOY_PATH'
+            test -f '$DEPLOY_PATH/.env' || { echo 'ERREUR : $DEPLOY_PATH/.env absent (docs/11 §4.3).'; exit 1; }
+            $PHP_BIN -r 'exit(version_compare(PHP_VERSION, \"8.3.0\", \">=\") ? 0 : 1);' || { echo 'ERREUR : PHP 8.3+ requis'; exit 1; }
+            command -v rsync >/dev/null || { echo 'ERREUR : rsync absent sur le serveur'; exit 1; }"
+
+      - name: Mode maintenance
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          $SSH "$SSH_USER@$SSH_HOST" "cd '$DEPLOY_PATH' && if [ -f artisan ]; then $PHP_BIN artisan down --retry=15 || true; fi"
+
+      - name: Envoi du code (rsync)
+        if: steps.config.outputs.ready == 'true'
+        working-directory: KOFFRA/backend
+        run: |
+          # storage/ (pièces jointes chiffrées, sessions, logs) et .env ne sont jamais écrasés.
+          rsync -az --delete \
+            --exclude='/node_modules/' --exclude='/tests/' \
+            --exclude='/.env' --exclude='/.env.*' --exclude='/storage/' --exclude='/bootstrap/cache/*.php' \
+            --exclude='/public/hot' --exclude='/public/storage' --exclude='/database/database.sqlite' \
+            --exclude='/phpunit.xml' --exclude='/.phpunit.cache/' \
+            -e "$SSH" ./ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+          rsync -az --ignore-existing -e "$SSH" storage/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/storage/"
+
+      - name: Migrations et caches
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          $SSH "$SSH_USER@$SSH_HOST" "set -e
+            cd '$DEPLOY_PATH'
+            chmod -R ug+rwX storage bootstrap/cache
+            $PHP_BIN artisan migrate --force
+            $PHP_BIN artisan optimize:clear
+            $PHP_BIN artisan config:cache
+            $PHP_BIN artisan route:cache
+            $PHP_BIN artisan view:cache
+            $PHP_BIN artisan up"
+
+      - name: Vérification du site
+        if: steps.config.outputs.ready == 'true' && vars.APP_URL != ''
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -fsS --max-time 15 "$APP_URL/up" > /dev/null; then echo "Site opérationnel : $APP_URL"; break; fi
+            sleep 5
+            [ "$i" = 5 ] && { echo "::error::$APP_URL/up ne répond pas après le déploiement"; exit 1; }
+          done
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/.env")
+          [ "$code" = 403 ] || [ "$code" = 404 ] || { echo "::error::.env accessible (HTTP $code)"; exit 1; }
+          curl -fsS "$APP_URL/api/v1/health" | grep -q '"ok"'
+
+      - name: Remise en ligne en cas d'échec
+        if: failure() && steps.config.outputs.ready == 'true'
+        run: |
+          $SSH "$SSH_USER@$SSH_HOST" "cd '$DEPLOY_PATH' && [ -f artisan ] && $PHP_BIN artisan up || true"
+          echo "::error::Déploiement échoué. Le site a été remis en ligne ; consultez les logs et storage/logs/laravel.log."
