@@ -127,6 +127,7 @@ Toutes les minutes : `/usr/bin/php /home/u590111860/apps/<projet>/artisan schedu
 Création par l'API (avec l'accord de l'utilisateur) : script de l'annexe A, lancé ainsi depuis Git Bash :
 
 ```bash
+export MSYS2_ENV_CONV_EXCL='*'   # ⚠ sinon Git Bash transforme DEPLOY_PATH en « C:/Program Files/Git/home/… »
 export GH_TOKEN=$(printf 'protocol=https\nhost=github.com\n\n' | git credential fill | sed -n 's/^password=//p')
 export CA_BUNDLE="$(cygpath -w /usr/ssl/certs/ca-bundle.crt)"     # PHP Windows n'a pas de certificats CA par défaut
 export KNOWN_HOSTS="$(ssh-keyscan -p 65002 -T 15 92.113.28.181 2>/dev/null | grep -v '^#')"
@@ -179,6 +180,13 @@ Compte administrateur : créé avec un **mot de passe provisoire** (changement i
 | Sessions perdues après mise à jour | `key:generate` relancé | ne jamais régénérer `APP_KEY` en production |
 | Heredocs Bash cassés (poste Windows) | `\'` dans un heredoc | écrire les fichiers avec l'outil d'écriture |
 | Deux en-têtes CSP | Hostinger ajoute `upgrade-insecure-requests` | normal, sans effet négatif |
+| Déploiement : « .env absent » alors qu'il existe ; dossier `~/C:` créé sur le serveur | Git Bash convertit les variables d'environnement ressemblant à des chemins (`/home/…`) avant de lancer PHP Windows : secret `DEPLOY_PATH` faux | `export MSYS2_ENV_CONV_EXCL='*'` avant `github-secrets.php`, recréer les secrets, supprimer `~/C:` (rencontré sur KOFFRA) |
+| `composer install` échoue en CI (`package:discover`) | garde-fou de production exécuté sans `.env` | limiter ce type de contrôle aux requêtes web (`runningInConsole()`) |
+| Session perdue à chaque rechargement (Sanctum SPA) | `Referrer-Policy: no-referrer` : ni Referer ni Origin sur les GET | `Referrer-Policy: same-origin` |
+
+### Spécificité KOFFRA (§4.9)
+Pas de mot de passe provisoire (chiffrement de bout en bout : le serveur ne doit jamais connaître le mot de passe).
+Premier compte : `$SSH "cd ~/apps/koffra && php artisan koffra:install"` → lien à usage unique valable 30 min, ouvert par le propriétaire lui-même.
 
 ---
 
