@@ -13,7 +13,7 @@ Ouvrir le dossier racine `KOFFRA` dans OpenCode et lui demander de lire `docs/08
 
 ## État d'avancement
 - [x] Étape 0 — socle : API Laravel 13 (`/api/v1`, cookies de session Sanctum, CORS, en-têtes de sécurité), frontend React/TS/Vite, docker-compose de dev, CI.
-- [ ] Étape 1 — conception cryptographique + module crypto frontend.
+- [x] Étape 1 — conception cryptographique (`docs/09`) + module crypto frontend (`frontend/src/crypto`, 35 tests).
 - [ ] Étapes suivantes : voir `docs/07-plan-de-realisation.md`.
 
 ## Décisions validées
