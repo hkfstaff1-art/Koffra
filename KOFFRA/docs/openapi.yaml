@@ -303,3 +303,121 @@ paths:
         - { name: per_page, in: query, schema: { type: integer, minimum: 10, maximum: 100 } }
         - { name: page, in: query, schema: { type: integer } }
       responses: { '200': { description: '{ data: [...], meta: { current_page, last_page, total } }' } }
+
+  # --- Coffre partagé (accès confirmé à la clé active requis, sinon 403) --------
+  /vault-items:
+    get:
+      summary: Entrées chiffrées (paginées ; le navigateur charge toutes les pages puis déchiffre et recherche localement)
+      parameters:
+        - { name: trashed, in: query, schema: { type: string, enum: [without, only, with] } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 500 } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses: { '200': { description: '{ data: [VaultItem], meta }' } }
+    post:
+      summary: Crée une entrée (UUID généré par le navigateur, utilisé dans les données associées)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuid, key_version, payload]
+              properties:
+                uuid: { type: string, format: uuid }
+                category_uuid: { type: [string, 'null'], format: uuid }
+                key_version: { type: integer }
+                favorite: { type: boolean }
+                payload: { $ref: '#/components/schemas/Envelope' }
+      responses: { '201': { description: Créée }, '409': { description: stale_key_version }, '422': { description: Validation } }
+  /vault-items/{uuid}:
+    parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
+    get: { summary: Une entrée (corbeille comprise), responses: { '200': { description: OK } } }
+    patch:
+      summary: Modifie une entrée (révision obligatoire ; 409 si modifiée entre-temps)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: { type: integer }
+                payload: { $ref: '#/components/schemas/Envelope' }
+                key_version: { type: integer }
+                category_uuid: { type: [string, 'null'] }
+                favorite: { type: boolean }
+                archived: { type: boolean }
+      responses: { '200': { description: OK }, '409': { description: revision_conflict | stale_key_version } }
+    delete: { summary: Met l'entrée à la corbeille, responses: { '200': { description: OK } } }
+  /vault-items/{uuid}/restore:
+    parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
+    post: { summary: Restaure depuis la corbeille, responses: { '200': { description: OK } } }
+  /vault-items/{uuid}/force:
+    parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
+    delete: { summary: '[reauth] Suppression définitive (entrée en corbeille + pièces jointes)', responses: { '200': { description: OK } } }
+  /vault-items/{uuid}/attachments:
+    parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      summary: Ajoute une pièce jointe chiffrée (multipart ; nom et type MIME restent dans le payload chiffré)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [uuid, file, ciphertext_sha256]
+              properties:
+                uuid: { type: string, format: uuid }
+                file: { type: string, format: binary }
+                ciphertext_sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+      responses: { '201': { description: OK }, '422': { description: checksum_mismatch | invalid_attachment } }
+  /attachments/{uuid}:
+    parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
+    get: { summary: Télécharge le blob chiffré (application/octet-stream), responses: { '200': { description: OK } } }
+    delete: { summary: Supprime la pièce jointe, responses: { '200': { description: OK } } }
+  /categories:
+    get: { summary: Catégories (noms chiffrés), responses: { '200': { description: OK } } }
+    post:
+      summary: Crée une catégorie (UUID du navigateur, nom chiffré)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuid, key_version, name]
+              properties:
+                uuid: { type: string, format: uuid }
+                key_version: { type: integer }
+                name: { $ref: '#/components/schemas/Envelope' }
+                icon: { type: string, pattern: '^[a-z0-9-]+$' }
+                sort_order: { type: integer }
+      responses: { '201': { description: OK } }
+  /categories/{uuid}:
+    parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
+    patch: { summary: 'Modifie (nom chiffré, icône, ordre)', responses: { '200': { description: OK } } }
+    delete: { summary: Supprime (les entrées sont conservées sans catégorie), responses: { '200': { description: OK } } }
+  /vault-keys/status:
+    get: { summary: 'Version active, rotation en cours et données restantes à re-chiffrer', responses: { '200': { description: OK } } }
+  /vault-keys:
+    post:
+      summary: '[reauth] Démarre une rotation : nouvelle version + enveloppes pour tous les admins ayant accès'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version: { type: integer }
+                own_grant: { $ref: '#/components/schemas/Envelope' }
+                sealed_grants:
+                  type: array
+                  items: { type: object, properties: { user_uuid: { type: string }, sealed_key: { type: string } } }
+      responses: { '201': { description: OK }, '422': { description: rotation_refused } }
+  /vault-keys/{version}/activate:
+    parameters: [{ name: version, in: path, required: true, schema: { type: integer } }]
+    post: { summary: Active la nouvelle clé (refusé tant que des données restent sur l'ancienne), responses: { '200': { description: OK }, '409': { description: rotation_incomplete } } }
+  /vault-keys/{version}/abort:
+    parameters: [{ name: version, in: path, required: true, schema: { type: integer } }]
+    post: { summary: Annule une rotation non commencée, responses: { '200': { description: OK } } }
+  /exports/encrypted:
+    post:
+      summary: '[reauth] Données du coffre (chiffrées) à re-chiffrer par le navigateur avec une phrase d''export'
+      responses: { '200': { description: '{ format, format_version, exported_at, vault_key_version, categories, items }' } }

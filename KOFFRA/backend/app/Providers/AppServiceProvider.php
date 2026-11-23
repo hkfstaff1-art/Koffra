@@ -2,8 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\User;
+use App\Services\VaultService;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use RuntimeException;
@@ -16,6 +20,11 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->guardProductionConfiguration();
         $this->configureRateLimiting();
+
+        // Rôle unique « admin » : l'accès au coffre partagé exige un accès confirmé à la clé active.
+        Gate::define('access-vault', fn (User $user) => $this->app->make(VaultService::class)->canAccess($user)
+            ? Response::allow()
+            : Response::deny('Accès au coffre en attente : un administrateur doit vous le transmettre.'));
     }
 
     /** Refuse de démarrer en production avec une configuration dangereuse. */

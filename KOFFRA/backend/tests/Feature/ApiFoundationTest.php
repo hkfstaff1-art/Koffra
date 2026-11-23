@@ -54,6 +54,12 @@ class ApiFoundationTest extends TestCase
         $this->assertNotSame('*', $hostile->headers->get('Access-Control-Allow-Origin'));
     }
 
+    public function test_unauthenticated_api_requests_get_json_401_never_a_redirect(): void
+    {
+        $this->get('/api/v1/me')->assertUnauthorized();
+        $this->getJson('/api/v1/vault-items')->assertUnauthorized();
+    }
+
     public function test_csrf_cookie_endpoint_is_available_for_the_spa(): void
     {
         $this->get('/sanctum/csrf-cookie')

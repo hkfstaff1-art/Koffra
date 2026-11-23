@@ -18,7 +18,13 @@ trait InteractsWithKoffraApi
     /** @var array<string, string> */
     protected array $browserCookies = [];
 
-    protected function api(string $method, string $uri, array $data = []): TestResponse
+    /** Requête multipart (pièces jointes) avec les mêmes cookies que le navigateur simulé. */
+    protected function apiMultipart(string $uri, array $data): TestResponse
+    {
+        return $this->api('POST', $uri, $data, multipart: true);
+    }
+
+    protected function api(string $method, string $uri, array $data = [], bool $multipart = false): TestResponse
     {
         // Chaque requête repart de zéro côté serveur, comme avec un vrai navigateur :
         // garde d'authentification et session rechargés depuis le cookie uniquement.
@@ -32,8 +38,10 @@ trait InteractsWithKoffraApi
             $this->withCookie($name, $value);
         }
 
-        $response = $this->withHeaders(['Referer' => 'http://localhost/', 'Accept' => 'application/json'])
-            ->json($method, '/api/v1'.$uri, $data);
+        $client = $this->withHeaders(['Referer' => 'http://localhost/', 'Accept' => 'application/json']);
+        $response = $multipart
+            ? $client->post('/api/v1'.$uri, $data)
+            : $client->json($method, '/api/v1'.$uri, $data);
 
         foreach ($response->headers->getCookies() as $cookie) {
             if ($cookie->isCleared() || $cookie->getValue() === null) {

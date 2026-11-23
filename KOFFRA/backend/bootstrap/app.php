@@ -20,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Authentification SPA par cookie de session (HttpOnly) : pas de token en localStorage.
         $middleware->statefulApi();
         $middleware->append(SecurityHeaders::class);
+        // API pure : jamais de redirection vers une page de connexion, toujours un 401 JSON.
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/');
         $middleware->alias([
             'trusted.device' => EnsureTrustedDevice::class,
             'reauth' => RequireRecentReauth::class,
