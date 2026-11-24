@@ -103,6 +103,8 @@ export interface ItemData {
   custom: CustomField[]
   notes: string
   attachments: AttachmentMeta[]
+  /** Donnée de test (chargée depuis Paramètres → Sauvegarde, supprimable en un clic) */
+  demo?: boolean
 }
 
 /** Entrée déchiffrée, telle qu'utilisée par l'interface (en mémoire uniquement). */
@@ -143,6 +145,7 @@ export function normalizeItem(raw: Record<string, unknown>): ItemData {
     custom: custom.map((c) => ({ label: c.label, value: String(c.value ?? ''), secret: Boolean(c.secret) })),
     notes: typeof raw.notes === 'string' ? raw.notes : '',
     attachments,
+    ...(raw.demo === true ? { demo: true } : {}),
   }
 }
 

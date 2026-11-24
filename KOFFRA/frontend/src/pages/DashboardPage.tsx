@@ -23,6 +23,7 @@ import { useSession } from '../app/session'
 import { formatDate } from '../components/format'
 import { Spinner } from '../components/ui'
 import { estimatePasswordStrength } from '../crypto'
+import { DemoDataBanner } from '../features/vault/DemoData'
 import { useVault } from '../features/vault/VaultProvider'
 import { koffra } from '../services/api/koffra'
 import { ACTIVITY_LABELS } from './ActivityPage'
@@ -90,6 +91,7 @@ export function DashboardPage() {
 
   return (
     <div className="page dashboard">
+      <DemoDataBanner />
       <section className="hero">
         <div className="hero-text">
           <h1>Bonjour, {firstName} !</h1>

@@ -124,6 +124,28 @@ class VaultApiTest extends TestCase
         $this->assertSame(0, VaultItem::withTrashed()->count());
     }
 
+    public function test_purge_deletes_only_trashed_items_with_a_single_reauth(): void
+    {
+        $a = $this->newItem();
+        $b = $this->newItem();
+        $kept = $this->newItem();
+        foreach ([$a, $b, $kept] as $item) {
+            $this->api('POST', '/vault-items', $item)->assertCreated();
+        }
+        $this->api('DELETE', "/vault-items/{$a['uuid']}")->assertOk();
+        $this->api('DELETE', "/vault-items/{$b['uuid']}")->assertOk();
+
+        $uuids = [$a['uuid'], $b['uuid'], $kept['uuid']];
+        $this->api('POST', '/vault-items/purge', ['uuids' => $uuids])->assertForbidden(); // réauth exigée
+        $this->reauth();
+        $this->api('POST', '/vault-items/purge', ['uuids' => $uuids])->assertOk()->assertJson(['deleted' => 2]);
+
+        // L'entrée active n'est jamais supprimée, et la réauthentification est consommée.
+        $this->assertSame([$kept['uuid']], VaultItem::withTrashed()->pluck('uuid')->all());
+        $this->api('POST', '/vault-items/purge', ['uuids' => [$kept['uuid']]])->assertForbidden();
+        $this->api('POST', '/vault-items/purge', ['uuids' => []])->assertForbidden();
+    }
+
     public function test_categories_have_encrypted_names_and_deletion_keeps_items(): void
     {
         $cat = ['uuid' => (string) Str::uuid(), 'key_version' => 1, 'name' => self::envelope(), 'icon' => 'cle-api'];

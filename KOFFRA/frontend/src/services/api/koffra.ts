@@ -187,6 +187,7 @@ export const koffra = {
   trashItem: (uuid: string) => api.delete(`/vault-items/${uuid}`),
   restoreItem: (uuid: string) => api.post(`/vault-items/${uuid}/restore`),
   forceDeleteItem: (uuid: string) => api.delete(`/vault-items/${uuid}/force`),
+  purgeItems: (uuids: string[]) => api.post<{ deleted: number }>('/vault-items/purge', { uuids }),
 
   categories: () => api.get<{ data: ApiCategory[] }>('/categories'),
   createCategory: (body: { uuid: string; key_version: number; name: Envelope; icon?: string }) => api.post('/categories', body),

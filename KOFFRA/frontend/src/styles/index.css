@@ -355,7 +355,7 @@ fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 0.75rem; min-wi
 
 /* =========================== Coffre (bloc-notes) ======================== */
 .notebook { display: grid; grid-template-columns: 230px minmax(280px, 360px) 1fr; height: calc(100dvh - var(--topbar-h)); min-height: 0; }
-.folders { border-right: 1px solid var(--gray-200); background: var(--white); padding: 1rem 0.75rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.15rem; }
+.folders { border-right: 1px solid var(--gray-200); background: var(--white); padding: 1rem 0.75rem; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 0.15rem; }
 .folder { display: flex; align-items: center; border-radius: 10px; }
 .folder-btn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.65rem; padding: 0.55rem 0.7rem; border: 0; background: none; border-radius: 10px; font: inherit; color: var(--gray-700); cursor: pointer; text-align: left; }
 .folder-btn:hover { background: var(--gray-50); color: var(--gray-900); }

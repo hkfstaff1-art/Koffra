@@ -354,6 +354,18 @@ paths:
   /vault-items/{uuid}/force:
     parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
     delete: { summary: '[reauth] Suppression définitive (entrée en corbeille + pièces jointes)', responses: { '200': { description: OK } } }
+  /vault-items/purge:
+    post:
+      summary: '[reauth] Suppression définitive de plusieurs entrées déjà en corbeille (vider la corbeille)'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuids]
+              properties:
+                uuids: { type: array, minItems: 1, maxItems: 500, items: { type: string, format: uuid } }
+      responses: { '200': { description: '{ deleted: nombre }' }, '403': { description: reauth_required }, '422': { description: Validation } }
   /vault-items/{uuid}/attachments:
     parameters: [{ name: uuid, in: path, required: true, schema: { type: string, format: uuid } }]
     post:

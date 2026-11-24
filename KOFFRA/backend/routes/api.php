@@ -95,6 +95,7 @@ Route::middleware(['auth:sanctum', 'trusted.device', 'throttle:api'])->group(fun
 
         Route::middleware('reauth')->group(function () {
             Route::delete('/vault-items/{uuid}/force', [VaultItemController::class, 'forceDestroy'])->whereUuid('uuid');
+            Route::post('/vault-items/purge', [VaultItemController::class, 'purge']);
             Route::post('/vault-keys', [VaultKeyController::class, 'start']);
             Route::post('/exports/encrypted', [ExportController::class, 'store']);
         });

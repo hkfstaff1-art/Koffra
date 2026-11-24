@@ -12,6 +12,7 @@ import { useSession } from '../app/session'
 import { koffra, toApiPassword, toApiRecovery } from '../services/api/koffra'
 import { buildEncryptedExport, importEncryptedExport, rotateVaultKey } from '../features/vault/operations'
 import { useVault } from '../features/vault/VaultProvider'
+import { DemoDataSection } from '../features/vault/DemoData'
 import { RecoveryKeyNotice, StrengthMeter } from './auth/AuthLayout'
 
 const TABS = [
@@ -182,6 +183,7 @@ export function BackupSettings() {
 
   return (
     <div className="settings-grid">
+      <DemoDataSection />
       <ExportImport
         busy={busy}
         progress={progress}

@@ -167,6 +167,36 @@ class VaultItemController extends Controller
         return response()->json(['message' => 'Entrée supprimée définitivement.']);
     }
 
+    /**
+     * Suppression définitive de plusieurs entrées de la corbeille en une seule réauthentification
+     * (« Vider la corbeille », suppression des données de test). Seules les entrées déjà en corbeille sont touchées.
+     */
+    public function purge(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'uuids' => ['required', 'array', 'min:1', 'max:500'],
+            'uuids.*' => ['required', 'uuid', 'distinct'],
+        ]);
+
+        $items = VaultItem::onlyTrashed()->with('attachments')->whereIn('uuid', $data['uuids'])->get();
+
+        DB::transaction(function () use ($items) {
+            foreach ($items as $item) {
+                foreach ($item->attachments as $attachment) {
+                    $this->storage->delete($attachment->storage_key);
+                }
+                $item->forceDelete();
+            }
+        });
+
+        $request->session()->forget('reauth_at');
+        foreach ($items as $item) {
+            $this->logger->log('item.deleted_permanently', $request->user(), ['item' => $item->uuid]);
+        }
+
+        return response()->json(['deleted' => $items->count()]);
+    }
+
     private function find(string $uuid, bool $withTrashed = false): VaultItem
     {
         return VaultItem::query()->when($withTrashed, fn ($q) => $q->withTrashed())->where('uuid', $uuid)->firstOrFail();

@@ -37,7 +37,9 @@ interface VaultValue {
   addAttachment: (entry: VaultEntry, file: File) => Promise<void>
   openAttachment: (meta: AttachmentMeta) => Promise<Blob>
   removeAttachment: (entry: VaultEntry, meta: AttachmentMeta) => Promise<void>
-  createCategory: (name: string, icon?: string) => Promise<void>
+  createCategory: (name: string, icon?: string) => Promise<string>
+  /** Supprime définitivement des entrées déjà en corbeille (une seule réauthentification). */
+  purge: (uuids: string[]) => Promise<void>
   renameCategory: (uuid: string, name: string) => Promise<void>
   deleteCategory: (uuid: string) => Promise<void>
 }
@@ -163,6 +165,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     setEntries((list) => list.filter((e) => e.uuid !== entry.uuid))
   }, [])
 
+  const purge = useCallback(async (uuids: string[]) => {
+    if (uuids.length === 0) return
+    await koffra.purgeItems(uuids)
+    setEntries((list) => list.filter((e) => !uuids.includes(e.uuid)))
+  }, [])
+
   const addAttachment = useCallback(
     async (entry: VaultEntry, file: File) => {
       if (file.size > MAX_ATTACHMENT_BYTES) throw new Error('Fichier trop volumineux (10 Mo maximum).')
@@ -201,6 +209,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       const uuid = crypto.randomUUID()
       await koffra.createCategory({ uuid, key_version: key.version, name: await encryptCategoryName(key, uuid, name), icon })
       setCategories((list) => [...list, { uuid, name, icon: icon ?? null, sortOrder: 0 }])
+      return uuid
     },
     [requireKey],
   )
@@ -233,6 +242,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       trash,
       restore,
       destroy,
+      purge,
       addAttachment,
       openAttachment,
       removeAttachment,
@@ -240,7 +250,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       renameCategory,
       deleteCategory,
     }),
-    [entries, categories, loading, error, unreadable, reload, save, setFlags, trash, restore, destroy, addAttachment, openAttachment, removeAttachment, createCategory, renameCategory, deleteCategory],
+    [entries, categories, loading, error, unreadable, reload, save, setFlags, trash, restore, destroy, purge, addAttachment, openAttachment, removeAttachment, createCategory, renameCategory, deleteCategory],
   )
 
   return <VaultContext.Provider value={value}>{children}</VaultContext.Provider>
