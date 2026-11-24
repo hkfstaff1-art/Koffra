@@ -2,10 +2,12 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import { useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { FeedbackProvider } from '../components/feedback'
+import { InstallPrompt } from '../components/InstallPrompt'
 import { Spinner } from '../components/ui'
 import { VaultProvider } from '../features/vault/VaultProvider'
 import { ActivityPage } from '../pages/ActivityPage'
 import { AdminsPage } from '../pages/AdminsPage'
+import { DashboardPage } from '../pages/DashboardPage'
 import { DevicesPage } from '../pages/DevicesPage'
 import { AccountSettings, BackupSettings, SettingsLayout } from '../pages/SettingsPage'
 import { InstallPage } from '../pages/auth/InstallPage'
@@ -50,7 +52,7 @@ function PrivateRoutes() {
       <VaultProvider>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route index element={<Navigate to="/coffre" replace />} />
+            <Route index element={<DashboardPage />} />
             <Route path="coffre" element={<VaultPage />}>
               <Route path="nouveau" element={<ItemEditorPage />} />
               <Route path=":uuid" element={<ItemDetailPage />} />
@@ -60,11 +62,13 @@ function PrivateRoutes() {
               <Route index element={<Navigate to="compte" replace />} />
               <Route path="compte" element={<AccountSettings />} />
               <Route path="appareils" element={<DevicesPage />} />
-              <Route path="administrateurs" element={<AdminsPage />} />
-              <Route path="journal" element={<ActivityPage />} />
+              <Route path="administrateurs" element={<Navigate to="/administrateurs" replace />} />
+              <Route path="journal" element={<Navigate to="/journal" replace />} />
               <Route path="sauvegarde" element={<BackupSettings />} />
             </Route>
-            <Route path="*" element={<Navigate to="/coffre" replace />} />
+            <Route path="administrateurs" element={<div className="page"><AdminsPage /></div>} />
+            <Route path="journal" element={<div className="page"><ActivityPage /></div>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       </VaultProvider>
@@ -90,6 +94,7 @@ export function App() {
         <FeedbackProvider>
           <SessionProvider>
             <Gate />
+            <InstallPrompt />
           </SessionProvider>
         </FeedbackProvider>
       </BrowserRouter>

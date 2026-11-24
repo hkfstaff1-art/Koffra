@@ -5,7 +5,7 @@ import { formatDate } from '../components/format'
 import { Button, PageHeader, Spinner } from '../components/ui'
 import { koffra } from '../services/api/koffra'
 
-const LABELS: Record<string, string> = {
+export const ACTIVITY_LABELS: Record<string, string> = {
   'setup.owner_created': 'Création du compte propriétaire',
   'auth.login': 'Connexion',
   'auth.login_failed': 'Échec de connexion',
@@ -50,7 +50,7 @@ export function ActivityPage() {
 
   return (
     <div className="stack-lg">
-      <PageHeader level={2} title="Journal d’activité" description="Connexions, appareils et modifications. Aucune valeur secrète n’est jamais journalisée." />
+      <PageHeader title="Journal d’audit" description="Connexions, appareils et modifications. Aucune valeur secrète n’est jamais journalisée." />
       <div className="card table-card">
       {log.isPending ? <Spinner /> : null}
       <table className="table">
@@ -68,7 +68,7 @@ export function ActivityPage() {
             <tr key={e.id} className={e.event.endsWith('failed') ? 'row-warning' : ''}>
               <td>{formatDate(e.created_at)}</td>
               <td>
-                {LABELS[e.event] ?? e.event}
+                {ACTIVITY_LABELS[e.event] ?? e.event}
                 {e.metadata && typeof e.metadata.target === 'string' ? ` (${e.metadata.target})` : ''}
                 {e.metadata && typeof e.metadata.email === 'string' ? ` (${e.metadata.email})` : ''}
               </td>

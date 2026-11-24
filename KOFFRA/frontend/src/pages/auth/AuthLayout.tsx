@@ -3,32 +3,40 @@ import { useState, type ReactNode } from 'react'
 import { Alert, Button, Checkbox, CopyButton } from '../../components/ui'
 import { estimatePasswordStrength } from '../../crypto'
 
+const YEAR = new Date().getFullYear()
+
 export function AuthLayout({ title, subtitle, children, wide = false }: { title: string; subtitle?: ReactNode; children: ReactNode; wide?: boolean }) {
   return (
     <main className="auth-shell">
+      <div className="auth-deco" aria-hidden />
       <div className={`auth-frame ${wide ? 'auth-wide' : ''}`}>
         <aside className="auth-brand" aria-hidden>
           <img src="/brand/koffra-logo-512.png" alt="" className="auth-brand-logo" />
-          <h2>Votre coffre-fort numérique privé</h2>
+          <h2>
+            Votre coffre-fort sécurisé pour mieux gérer, <em>ensemble.</em>
+          </h2>
           <ul>
             <li>
-              <Lock className="icon" /> Chiffré dans votre navigateur
+              <span><Lock className="icon" /></span> Chiffré dans votre navigateur
             </li>
             <li>
-              <ShieldCheck className="icon" /> Le serveur ne voit jamais vos secrets
+              <span><ShieldCheck className="icon" /></span> Le serveur ne voit jamais vos secrets
             </li>
             <li>
-              <Smartphone className="icon" /> Ordinateur, tablette et téléphone
+              <span><Smartphone className="icon" /></span> Ordinateur, tablette et téléphone
             </li>
           </ul>
         </aside>
         <section className="auth-card" aria-labelledby="auth-title">
-          <img src="/brand/koffra-logo-256.png" alt="KOFFRA" className="auth-logo" width={132} height={88} />
+          <img src="/brand/koffra-logo-256.png" alt="KOFFRA" className="auth-logo" width={150} height={100} />
           <header className="auth-head">
             <h1 id="auth-title">{title}</h1>
             {subtitle ? <p>{subtitle}</p> : null}
           </header>
           {children}
+          <footer className="auth-foot">
+            <ShieldCheck className="icon-sm" aria-hidden /> Chiffrement de bout en bout · KOFFRA © {YEAR}
+          </footer>
         </section>
       </div>
     </main>

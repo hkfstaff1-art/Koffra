@@ -1,6 +1,6 @@
 import { Archive, Check, Folder, FolderPlus, Inbox, Pencil, Plus, Search, ShieldAlert, Star, Trash2, Vault as VaultIcon, X } from 'lucide-react'
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, Outlet, useLocation, useParams } from 'react-router'
+import { Link, Outlet, useLocation, useParams, useSearchParams } from 'react-router'
 import { useFeedback } from '../../components/feedback'
 import { errorMessage, formatShortDate } from '../../components/format'
 import { Alert, EmptyState, IconButton, Spinner } from '../../components/ui'
@@ -35,7 +35,16 @@ export function VaultPage() {
   const { uuid } = useParams()
   const { pathname } = useLocation()
   const [folder, setFolder] = useState<FolderId>('all')
-  const [query, setQuery] = useState('')
+  const [searchParams] = useSearchParams()
+  const urlQuery = searchParams.get('q')
+  const [query, setQuery] = useState(urlQuery ?? '')
+  const [lastUrlQuery, setLastUrlQuery] = useState(urlQuery)
+  if (urlQuery !== lastUrlQuery) {
+    // Nouvelle recherche lancée depuis la barre du haut
+    setLastUrlQuery(urlQuery)
+    setQuery(urlQuery ?? '')
+    setFolder('all')
+  }
   const editing = pathname.endsWith('/nouveau') || pathname.endsWith('/modifier')
   const hasDetail = uuid !== undefined || editing
 

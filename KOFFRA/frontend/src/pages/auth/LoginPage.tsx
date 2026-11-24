@@ -1,4 +1,4 @@
-import { ArrowLeft, Lock, LogOut, Mail, RotateCw, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Lock, LogIn, LogOut, Mail, RotateCw, ShieldCheck } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { z } from 'zod'
@@ -127,7 +127,7 @@ export function LoginPage() {
   }
 
   return (
-    <AuthLayout title="Connexion" subtitle="Accédez à votre coffre-fort KOFFRA.">
+    <AuthLayout title="Bienvenue sur KOFFRA" subtitle="Connectez-vous pour accéder à votre coffre-fort.">
       {error ? <Alert kind="error">{error}</Alert> : null}
       <form onSubmit={submitPassword} className="stack" noValidate>
         <TextInput
@@ -150,12 +150,12 @@ export function LoginPage() {
           autoComplete="current-password"
           required
         />
-        <Button type="submit" busy={busy} className="btn-block">
+        <p className="forgot">
+          <Link to="/recuperation">Mot de passe oublié ?</Link>
+        </p>
+        <Button type="submit" busy={busy} icon={LogIn} className="btn-block">
           {busy ? 'Vérification…' : 'Se connecter'}
         </Button>
-        <p className="center small">
-          <Link to="/recuperation">Mot de passe oublié ? Utiliser ma clé de récupération</Link>
-        </p>
       </form>
     </AuthLayout>
   )

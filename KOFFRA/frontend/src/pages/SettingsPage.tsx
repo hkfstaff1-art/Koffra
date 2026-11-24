@@ -1,4 +1,4 @@
-import { DatabaseBackup, Download, Fingerprint, KeyRound, Lock, MonitorSmartphone, RefreshCcw, ScrollText, ShieldAlert, Timer, Upload, UserCog, Users } from 'lucide-react'
+import { DatabaseBackup, Download, Fingerprint, KeyRound, Lock, MonitorSmartphone, RefreshCcw, ShieldAlert, Timer, Upload, UserCog } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router'
 import { z } from 'zod'
@@ -17,15 +17,13 @@ import { RecoveryKeyNotice, StrengthMeter } from './auth/AuthLayout'
 const TABS = [
   { to: 'compte', label: 'Mon compte', icon: UserCog },
   { to: 'appareils', label: 'Appareils', icon: MonitorSmartphone },
-  { to: 'administrateurs', label: 'Administrateurs', icon: Users },
-  { to: 'journal', label: 'Journal', icon: ScrollText },
   { to: 'sauvegarde', label: 'Sauvegarde', icon: DatabaseBackup },
 ]
 
 /** Écran Paramètres : un seul endroit, organisé en onglets. */
 export function SettingsLayout() {
   return (
-    <div className="settings">
+    <div className="page settings">
       <header className="settings-head">
         <h1>Paramètres</h1>
         <nav className="tabs" aria-label="Rubriques des paramètres">
