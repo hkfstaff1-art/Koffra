@@ -307,11 +307,12 @@ export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'blue
   return <span className={`badge badge-${tone}`}>{children}</span>
 }
 
-export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({ title, description, actions, level = 1 }: { title: string; description?: ReactNode; actions?: ReactNode; level?: 1 | 2 }) {
+  const Heading = level === 1 ? 'h1' : 'h2'
   return (
     <header className="page-header">
       <div>
-        <h1>{title}</h1>
+        <Heading className={level === 2 ? 'page-title-2' : undefined}>{title}</Heading>
         {description ? <p className="page-desc">{description}</p> : null}
       </div>
       {actions ? <div className="page-actions">{actions}</div> : null}

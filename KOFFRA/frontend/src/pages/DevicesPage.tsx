@@ -25,6 +25,7 @@ export function DevicesPage() {
   return (
     <div className="stack-lg">
       <PageHeader
+        level={2}
         title="Appareils et sessions"
         description="Un nouvel appareil doit être approuvé par un code envoyé à votre email. Révoquer un appareil coupe ses sessions immédiatement."
         actions={

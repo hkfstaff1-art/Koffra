@@ -44,8 +44,8 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const toast = useCallback(
     (kind: ToastKind, message: string) => {
       const id = nextId.current++
-      setToasts((list) => [...list.slice(-3), { id, kind, message }])
-      window.setTimeout(() => dismiss(id), kind === 'error' ? 8000 : 4500)
+      setToasts((list) => [...list.slice(-1), { id, kind, message }])
+      window.setTimeout(() => dismiss(id), kind === 'error' ? 7000 : 3000)
     },
     [dismiss],
   )

@@ -6,19 +6,15 @@ import { Spinner } from '../components/ui'
 import { VaultProvider } from '../features/vault/VaultProvider'
 import { ActivityPage } from '../pages/ActivityPage'
 import { AdminsPage } from '../pages/AdminsPage'
-import { CategoriesPage } from '../pages/CategoriesPage'
-import { DashboardPage } from '../pages/DashboardPage'
 import { DevicesPage } from '../pages/DevicesPage'
-import { GeneratorPage } from '../pages/GeneratorPage'
-import { MenuPage } from '../pages/MenuPage'
-import { SettingsPage } from '../pages/SettingsPage'
+import { AccountSettings, BackupSettings, SettingsLayout } from '../pages/SettingsPage'
 import { InstallPage } from '../pages/auth/InstallPage'
 import { InvitationPage } from '../pages/auth/InvitationPage'
 import { LoginPage, UnlockPage } from '../pages/auth/LoginPage'
 import { RecoveryPage } from '../pages/auth/RecoveryPage'
 import { ItemDetailPage } from '../pages/vault/ItemDetailPage'
 import { ItemEditorPage } from '../pages/vault/ItemEditorPage'
-import { VaultListPage } from '../pages/vault/VaultListPage'
+import { VaultPage } from '../pages/vault/VaultPage'
 import { koffra } from '../services/api/koffra'
 import { AppLayout } from './AppLayout'
 import { ReauthProvider } from './reauth'
@@ -54,20 +50,21 @@ function PrivateRoutes() {
       <VaultProvider>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="coffre" element={<VaultListPage />}>
+            <Route index element={<Navigate to="/coffre" replace />} />
+            <Route path="coffre" element={<VaultPage />}>
               <Route path="nouveau" element={<ItemEditorPage />} />
               <Route path=":uuid" element={<ItemDetailPage />} />
               <Route path=":uuid/modifier" element={<ItemEditorPage />} />
             </Route>
-            <Route path="generateur" element={<GeneratorPage />} />
-            <Route path="categories" element={<CategoriesPage />} />
-            <Route path="appareils" element={<DevicesPage />} />
-            <Route path="administrateurs" element={<AdminsPage />} />
-            <Route path="journal" element={<ActivityPage />} />
-            <Route path="parametres" element={<SettingsPage />} />
-            <Route path="menu" element={<MenuPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="parametres" element={<SettingsLayout />}>
+              <Route index element={<Navigate to="compte" replace />} />
+              <Route path="compte" element={<AccountSettings />} />
+              <Route path="appareils" element={<DevicesPage />} />
+              <Route path="administrateurs" element={<AdminsPage />} />
+              <Route path="journal" element={<ActivityPage />} />
+              <Route path="sauvegarde" element={<BackupSettings />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/coffre" replace />} />
           </Route>
         </Routes>
       </VaultProvider>

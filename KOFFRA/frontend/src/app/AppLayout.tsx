@@ -1,31 +1,8 @@
-import {
-  FolderTree,
-  LayoutDashboard,
-  Lock,
-  LogOut,
-  Menu,
-  MonitorSmartphone,
-  ScrollText,
-  Settings,
-  Users,
-  Vault,
-  WandSparkles,
-  type LucideIcon,
-} from 'lucide-react'
-import { NavLink, Outlet } from 'react-router'
+import { ChevronDown, Lock, LogOut, Settings, Vault } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { NavLink, Outlet, useNavigate } from 'react-router'
 import { Alert } from '../components/ui'
 import { useSession } from './session'
-
-export const NAV: { to: string; label: string; short: string; icon: LucideIcon; end?: boolean; mobile?: boolean }[] = [
-  { to: '/', label: 'Tableau de bord', short: 'Accueil', icon: LayoutDashboard, end: true, mobile: true },
-  { to: '/coffre', label: 'Coffre', short: 'Coffre', icon: Vault, mobile: true },
-  { to: '/generateur', label: 'Générateur', short: 'Générer', icon: WandSparkles, mobile: true },
-  { to: '/categories', label: 'Catégories', short: 'Catégories', icon: FolderTree },
-  { to: '/appareils', label: 'Appareils', short: 'Appareils', icon: MonitorSmartphone },
-  { to: '/administrateurs', label: 'Administrateurs', short: 'Admins', icon: Users },
-  { to: '/journal', label: 'Journal d’activité', short: 'Journal', icon: ScrollText },
-  { to: '/parametres', label: 'Paramètres', short: 'Réglages', icon: Settings, mobile: true },
-]
 
 function initials(name: string | undefined): string {
   return (name ?? '?')
@@ -35,87 +12,98 @@ function initials(name: string | undefined): string {
     .join('')
 }
 
+/** Menu du compte (nom, verrouiller, se déconnecter). */
+function AccountMenu() {
+  const { me, lock, logout } = useSession()
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', close)
+    }
+  }, [open])
+
+  return (
+    <div className="account" ref={ref}>
+      <button type="button" className="account-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <span className="avatar sm" aria-hidden>
+          {initials(me?.user.name)}
+        </span>
+        <span className="account-name">{me?.user.name}</span>
+        <ChevronDown className="icon-sm" aria-hidden />
+      </button>
+      {open ? (
+        <div className="account-menu" role="menu">
+          <div className="account-head">
+            <strong>{me?.user.name}</strong>
+            <small>{me?.user.email}</small>
+          </div>
+          <button type="button" role="menuitem" onClick={() => (setOpen(false), navigate('/parametres/compte'))}>
+            <Settings className="icon" aria-hidden /> Mon compte
+          </button>
+          <button type="button" role="menuitem" onClick={() => void lock()}>
+            <Lock className="icon" aria-hidden /> Verrouiller le coffre
+          </button>
+          <button type="button" role="menuitem" className="danger" onClick={() => void logout()}>
+            <LogOut className="icon" aria-hidden /> Se déconnecter
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/** Structure de l'application : une barre en haut, deux écrans (Coffre, Paramètres). */
 export function AppLayout() {
-  const { me, lock, logout, vaultPending } = useSession()
+  const { lock, vaultPending } = useSession()
 
   return (
     <div className="app">
       <a href="#contenu" className="skip-link">
         Aller au contenu
       </a>
-
-      <aside className="sidebar" aria-label="Navigation principale">
-        <div className="brand">
-          <img src="/brand/koffra-logo-256.png" alt="" width={40} height={27} />
+      <header className="appbar">
+        <NavLink to="/coffre" className="brand" aria-label="KOFFRA — coffre">
+          <img src="/brand/koffra-logo-256.png" alt="" width={36} height={24} />
           <span>KOFFRA</span>
-        </div>
-        <nav className="nav">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              <Icon className="icon" aria-hidden />
-              <span>{label}</span>
-            </NavLink>
-          ))}
+        </NavLink>
+        <nav className="appnav" aria-label="Navigation principale">
+          <NavLink to="/coffre" className={({ isActive }) => `appnav-link ${isActive ? 'active' : ''}`}>
+            <Vault className="icon" aria-hidden />
+            <span>Coffre</span>
+          </NavLink>
+          <NavLink to="/parametres" className={({ isActive }) => `appnav-link ${isActive ? 'active' : ''}`}>
+            <Settings className="icon" aria-hidden />
+            <span>Paramètres</span>
+          </NavLink>
         </nav>
-        <div className="sidebar-foot">
-          <div className="user-card" title={me?.user.email}>
-            <span className="avatar" aria-hidden>
-              {initials(me?.user.name)}
-            </span>
-            <span className="user-meta">
-              <strong>{me?.user.name}</strong>
-              <small>Administrateur</small>
-            </span>
-          </div>
-          <button type="button" className="nav-link" onClick={() => void lock()}>
-            <Lock className="icon" aria-hidden />
-            <span>Verrouiller</span>
-          </button>
-          <button type="button" className="nav-link" onClick={() => void logout()}>
-            <LogOut className="icon" aria-hidden />
-            <span>Se déconnecter</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Barre supérieure mobile */}
-      <header className="topbar">
-        <div className="brand">
-          <img src="/brand/koffra-logo-256.png" alt="" width={34} height={23} />
-          <span>KOFFRA</span>
-        </div>
-        <div className="row">
-          <button type="button" className="topbar-btn" onClick={() => void lock()} aria-label="Verrouiller le coffre">
+        <div className="appbar-end">
+          <button type="button" className="lock-btn" onClick={() => void lock()} title="Verrouiller le coffre" aria-label="Verrouiller le coffre">
             <Lock className="icon" aria-hidden />
           </button>
-          <button type="button" className="topbar-btn" onClick={() => void logout()} aria-label="Se déconnecter">
-            <LogOut className="icon" aria-hidden />
-          </button>
+          <AccountMenu />
         </div>
       </header>
 
       <main id="contenu" className="content" tabIndex={-1}>
         {vaultPending ? (
-          <Alert kind="warning" title="Accès au coffre en attente">
-            Communiquez votre empreinte de sécurité (Paramètres) à un administrateur : il vous transmettra l’accès après vérification.
-          </Alert>
+          <div className="content-pad">
+            <Alert kind="warning" title="Accès au coffre en attente">
+              Communiquez votre empreinte de sécurité (Paramètres → Mon compte) à un administrateur : il vous transmettra l’accès après vérification.
+            </Alert>
+          </div>
         ) : null}
         <Outlet />
       </main>
-
-      {/* Navigation mobile en bas d'écran */}
-      <nav className="tabbar" aria-label="Navigation rapide">
-        {NAV.filter((n) => n.mobile).map(({ to, short, icon: Icon, end }) => (
-          <NavLink key={to} to={to} end={end} className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}>
-            <Icon className="icon" aria-hidden />
-            <span>{short}</span>
-          </NavLink>
-        ))}
-        <NavLink to="/menu" className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}>
-          <Menu className="icon" aria-hidden />
-          <span>Plus</span>
-        </NavLink>
-      </nav>
     </div>
   )
 }

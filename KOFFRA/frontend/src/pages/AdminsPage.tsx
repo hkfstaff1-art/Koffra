@@ -61,7 +61,7 @@ export function AdminsPage() {
 
   return (
     <div className="stack-lg">
-      <PageHeader title="Administrateurs" description={`${me?.limits.used_seats ?? 0} compte(s) utilisé(s) sur ${me?.limits.max_accounts ?? 5}, invitations en cours comprises.`} />
+      <PageHeader level={2} title="Administrateurs" description={`${me?.limits.used_seats ?? 0} compte(s) utilisé(s) sur ${me?.limits.max_accounts ?? 5}, invitations en cours comprises.`} />
       <Alert kind="info" title="Un seul rôle : administrateur">
         Chaque administrateur a tous les droits sur le coffre partagé. N’invitez que des personnes de confiance.
       </Alert>

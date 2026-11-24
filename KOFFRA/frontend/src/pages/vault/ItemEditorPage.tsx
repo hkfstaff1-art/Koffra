@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { useFeedback } from '../../components/feedback'
 import { errorMessage } from '../../components/format'
 import { Alert, Button, Checkbox, EmptyState, Field, IconButton, PasswordInput, SelectField, TextArea, TextInput } from '../../components/ui'
-import { generatePassword } from '../../crypto'
+import { GeneratorModal } from '../../features/vault/GeneratorModal'
 import { ApiError } from '../../services/api/client'
 import { useVault } from '../../features/vault/VaultProvider'
 import { emptyItem, forbiddenDataWarnings, ITEM_TYPES, type ItemData, type ItemType } from '../../features/vault/model'
@@ -21,6 +21,7 @@ export function ItemEditorPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [generator, setGenerator] = useState(false)
 
   if (uuid && !existing) return <EmptyState icon={X} title="Entrée introuvable" />
 
@@ -128,8 +129,8 @@ export function ItemEditorPage() {
               <div key={f.key} className={f.multiline ? 'span-2' : ''}>
                 <PasswordInput label={f.label} value={value} onChange={(e) => setField(f.key, e.target.value)} />
                 {f.key === 'password' ? (
-                  <Button variant="ghost" size="sm" icon={WandSparkles} onClick={async () => setField('password', await generatePassword())}>
-                    Générer un mot de passe robuste
+                  <Button variant="ghost" size="sm" icon={WandSparkles} onClick={() => setGenerator(true)}>
+                    Générer un mot de passe
                   </Button>
                 ) : null}
               </div>
@@ -192,6 +193,16 @@ export function ItemEditorPage() {
       <Checkbox label="Ajouter aux favoris" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} />
 
       {warnings.length ? <Alert kind="warning" title="À vérifier">{warnings.join(' · ')}</Alert> : null}
+
+      {generator ? (
+        <GeneratorModal
+          onClose={() => setGenerator(false)}
+          onUse={(p) => {
+            setField('password', p)
+            setGenerator(false)
+          }}
+        />
+      ) : null}
 
       <footer className="form-actions">
         <Link to={backTo} className="btn btn-secondary btn-md">
