@@ -1,6 +1,9 @@
+import { Archive, ArchiveRestore, ArrowLeft, Download, ExternalLink, FileText, Paperclip, Pencil, RotateCcw, Star, Trash2, Upload, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { Alert, Button, CopyButton, SecretValue, errorMessage, formatDate } from '../../components/ui'
+import { useFeedback } from '../../components/feedback'
+import { errorMessage, formatDate, formatSize } from '../../components/format'
+import { Alert, Button, CopyButton, EmptyState, IconButton, SecretValue } from '../../components/ui'
 import { useReauth } from '../../app/reauth'
 import { useVault } from '../../features/vault/VaultProvider'
 import { ITEM_TYPES, type AttachmentMeta } from '../../features/vault/model'
@@ -13,31 +16,32 @@ export function ItemDetailPage() {
   const navigate = useNavigate()
   const vault = useVault()
   const { withReauth, confirmPassword } = useReauth()
+  const { toast, confirm } = useFeedback()
   const entry = vault.entries.find((e) => e.uuid === uuid)
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
-  if (!entry) return <p className="empty">Entrée introuvable.</p>
+  if (!entry) return <EmptyState icon={FileText} title="Entrée introuvable" />
 
   const type = ITEM_TYPES[entry.data.type]
+  const TypeIcon = type.icon
   const category = vault.categories.find((c) => c.uuid === entry.categoryUuid)
   const reveal = CRITICAL_TYPES.has(entry.data.type) ? confirmPassword : undefined
 
-  const act = async (fn: () => Promise<unknown>) => {
-    setBusy(true)
-    setError(null)
+  const act = async (name: string, fn: () => Promise<unknown>, success?: string) => {
+    setBusy(name)
     try {
       await fn()
+      if (success) toast('success', success)
     } catch (err) {
-      setError(errorMessage(err))
+      toast('error', errorMessage(err))
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
   async function download(meta: AttachmentMeta) {
-    await act(async () => {
+    await act(`dl-${meta.uuid}`, async () => {
       const url = URL.createObjectURL(await vault.openAttachment(meta))
       const a = document.createElement('a')
       a.href = url
@@ -47,133 +51,195 @@ export function ItemDetailPage() {
     })
   }
 
+  const filled = type.fields.filter((f) => entry.data.fields[f.key])
+
   return (
     <article className="card detail" aria-labelledby="detail-title">
-      <header className="pane-head">
-        <div>
-          <p className="eyebrow">
-            {type.icon} {type.label}
-            {category ? ` · ${category.name}` : ''}
-          </p>
-          <h2 id="detail-title">{entry.data.title}</h2>
-        </div>
-        <Link to="/coffre" className="btn btn-ghost icon-btn" aria-label="Fermer">
-          ✕
+      <header className="detail-head">
+        <Link to="/coffre" className="btn btn-ghost btn-sm back-link">
+          <ArrowLeft className="icon" aria-hidden /> Coffre
         </Link>
+        <div className="detail-title">
+          <span className={`item-icon lg type-${entry.data.type}`} aria-hidden>
+            <TypeIcon />
+          </span>
+          <div>
+            <p className="eyebrow">
+              {type.label}
+              {category ? ` · ${category.name}` : ''}
+            </p>
+            <h2 id="detail-title">
+              {entry.data.title} {entry.favorite ? <Star className="icon star" aria-label="Favori" /> : null}
+            </h2>
+          </div>
+        </div>
+        {!entry.deletedAt ? (
+          <div className="detail-actions">
+            <Link to={`/coffre/${entry.uuid}/modifier`} className="btn btn-primary btn-sm">
+              <Pencil className="icon" aria-hidden /> Modifier
+            </Link>
+            <IconButton
+              icon={Star}
+              label={entry.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+              className={entry.favorite ? 'is-active' : ''}
+              onClick={() => void act('fav', () => vault.setFlags(entry, { favorite: !entry.favorite }))}
+            />
+            <IconButton
+              icon={entry.archivedAt ? ArchiveRestore : Archive}
+              label={entry.archivedAt ? 'Désarchiver' : 'Archiver'}
+              onClick={() => void act('arch', () => vault.setFlags(entry, { archived: !entry.archivedAt }), entry.archivedAt ? 'Entrée désarchivée.' : 'Entrée archivée.')}
+            />
+            <IconButton
+              icon={Trash2}
+              label="Mettre à la corbeille"
+              variant="ghost"
+              className="danger-hover"
+              onClick={async () => {
+                if (await confirm({ title: 'Mettre à la corbeille ?', message: `« ${entry.data.title} » pourra être restaurée depuis la corbeille.`, confirmLabel: 'Mettre à la corbeille', tone: 'danger' })) {
+                  await act('trash', () => vault.trash(entry), 'Entrée placée dans la corbeille.')
+                }
+              }}
+            />
+          </div>
+        ) : null}
       </header>
 
-      {error ? <Alert kind="error">{error}</Alert> : null}
-      {entry.deletedAt ? <Alert kind="warning">Dans la corbeille depuis le {formatDate(entry.deletedAt)}.</Alert> : null}
+      {entry.deletedAt ? (
+        <Alert kind="warning" title={`Dans la corbeille depuis le ${formatDate(entry.deletedAt)}`}>
+          <div className="row wrap">
+            <Button size="sm" icon={RotateCcw} busy={busy === 'restore'} onClick={() => void act('restore', () => vault.restore(entry), 'Entrée restaurée.')}>
+              Restaurer
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              icon={Trash2}
+              busy={busy === 'destroy'}
+              onClick={async () => {
+                if (
+                  await confirm({
+                    title: 'Supprimer définitivement ?',
+                    message: 'Cette entrée et ses pièces jointes seront effacées. Cette action est irréversible.',
+                    confirmLabel: 'Supprimer définitivement',
+                    tone: 'danger',
+                  })
+                ) {
+                  await act('destroy', async () => {
+                    await withReauth(() => vault.destroy(entry))
+                    navigate('/coffre')
+                  }, 'Entrée supprimée définitivement.')
+                }
+              }}
+            >
+              Supprimer définitivement
+            </Button>
+          </div>
+        </Alert>
+      ) : null}
 
-      <dl className="fields">
-        {type.fields.map((f) =>
-          entry.data.fields[f.key] ? (
-            <div key={f.key}>
-              <dt>{f.label}</dt>
+      {filled.length || entry.data.custom.length ? (
+        <dl className="fields">
+          {filled.map((f) => {
+            const value = entry.data.fields[f.key]!
+            return (
+              <div key={f.key} className="field-row">
+                <dt>{f.label}</dt>
+                <dd>
+                  {f.secret ? (
+                    <SecretValue value={value} onReveal={reveal} />
+                  ) : (
+                    <span className="value-row">
+                      {f.inputType === 'url' ? (
+                        <a href={value} target="_blank" rel="noopener noreferrer" className="value-text link">
+                          {value} <ExternalLink className="icon-sm" aria-hidden />
+                        </a>
+                      ) : (
+                        <span className="value-text">{value}</span>
+                      )}
+                      <CopyButton value={value} />
+                    </span>
+                  )}
+                </dd>
+              </div>
+            )
+          })}
+          {entry.data.custom.map((c, i) => (
+            <div key={i} className="field-row">
+              <dt>{c.label}</dt>
               <dd>
-                {f.secret ? (
-                  <SecretValue value={entry.data.fields[f.key]!} onReveal={reveal} />
-                ) : f.inputType === 'url' ? (
-                  <span className="row">
-                    <a href={entry.data.fields[f.key]} target="_blank" rel="noopener noreferrer">
-                      {entry.data.fields[f.key]}
-                    </a>
-                    <CopyButton value={entry.data.fields[f.key]!} />
-                  </span>
+                {c.secret ? (
+                  <SecretValue value={c.value} onReveal={reveal} />
                 ) : (
-                  <span className="row">
-                    <span>{entry.data.fields[f.key]}</span>
-                    <CopyButton value={entry.data.fields[f.key]!} />
+                  <span className="value-row">
+                    <span className="value-text">{c.value}</span>
+                    <CopyButton value={c.value} />
                   </span>
                 )}
               </dd>
             </div>
-          ) : null,
-        )}
-        {entry.data.custom.map((c, i) => (
-          <div key={i}>
-            <dt>{c.label}</dt>
-            <dd>{c.secret ? <SecretValue value={c.value} onReveal={reveal} /> : c.value}</dd>
-          </div>
-        ))}
-        {entry.data.notes ? (
-          <div>
-            <dt>Notes</dt>
-            <dd className="notes">{entry.data.notes}</dd>
-          </div>
-        ) : null}
-      </dl>
+          ))}
+        </dl>
+      ) : null}
 
-      <section aria-labelledby="att-title" className="stack">
-        <h3 id="att-title">Pièces jointes chiffrées</h3>
-        {entry.data.attachments.length === 0 ? <p className="field-hint">Aucune.</p> : null}
+      {entry.data.notes ? (
+        <section className="notes-block">
+          <h3>Notes</h3>
+          <p className="notes">{entry.data.notes}</p>
+        </section>
+      ) : null}
+
+      <section aria-labelledby="att-title" className="attachments-block">
+        <div className="row between">
+          <h3 id="att-title">
+            <Paperclip className="icon-sm" aria-hidden /> Pièces jointes chiffrées
+          </h3>
+          {!entry.deletedAt ? (
+            <>
+              <input
+                ref={fileInput}
+                type="file"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  if (file) void act('upload', () => vault.addAttachment(entry, file), `« ${file.name} » ajouté (chiffré).`)
+                }}
+              />
+              <Button variant="secondary" size="sm" icon={Upload} busy={busy === 'upload'} onClick={() => fileInput.current?.click()}>
+                Ajouter
+              </Button>
+            </>
+          ) : null}
+        </div>
+        {entry.data.attachments.length === 0 ? <p className="muted small">Aucune pièce jointe. 10 Mo maximum par fichier.</p> : null}
         <ul className="attachments">
           {entry.data.attachments.map((a) => (
             <li key={a.uuid}>
-              <span>
-                📎 {a.name} <small>({Math.ceil(a.size / 1024)} Ko)</small>
+              <FileText className="icon" aria-hidden />
+              <span className="att-name">
+                {a.name} <small>{formatSize(a.size)}</small>
               </span>
-              <span className="row">
-                <Button variant="ghost" className="btn-small" onClick={() => void download(a)}>
-                  Télécharger
-                </Button>
-                {!entry.deletedAt ? (
-                  <Button variant="ghost" className="btn-small" onClick={() => void act(() => vault.removeAttachment(entry, a))}>
-                    Supprimer
-                  </Button>
-                ) : null}
-              </span>
+              <IconButton icon={Download} label={`Télécharger ${a.name}`} disabled={busy === `dl-${a.uuid}`} onClick={() => void download(a)} />
+              {!entry.deletedAt ? (
+                <IconButton
+                  icon={X}
+                  label={`Supprimer ${a.name}`}
+                  className="danger-hover"
+                  onClick={async () => {
+                    if (await confirm({ title: 'Supprimer la pièce jointe ?', message: `« ${a.name} » sera définitivement supprimée.`, confirmLabel: 'Supprimer', tone: 'danger' })) {
+                      await act('rm', () => vault.removeAttachment(entry, a), 'Pièce jointe supprimée.')
+                    }
+                  }}
+                />
+              ) : null}
             </li>
           ))}
         </ul>
-        {!entry.deletedAt ? (
-          <>
-            <input ref={fileInput} type="file" hidden onChange={(e) => e.target.files?.[0] && void act(() => vault.addAttachment(entry, e.target.files![0]!))} />
-            <Button variant="secondary" busy={busy} onClick={() => fileInput.current?.click()}>
-              Ajouter une pièce jointe (10 Mo max)
-            </Button>
-          </>
-        ) : null}
       </section>
 
-      <p className="field-hint">
+      <p className="muted small">
         Créée le {formatDate(entry.createdAt)} · modifiée le {formatDate(entry.updatedAt)}
       </p>
-
-      <footer className="row wrap">
-        {entry.deletedAt ? (
-          <>
-            <Button onClick={() => void act(() => vault.restore(entry))}>Restaurer</Button>
-            <Button
-              variant="danger"
-              onClick={() =>
-                window.confirm('Supprimer définitivement cette entrée et ses pièces jointes ?') &&
-                void act(async () => {
-                  await withReauth(() => vault.destroy(entry))
-                  navigate('/coffre')
-                })
-              }
-            >
-              Supprimer définitivement
-            </Button>
-          </>
-        ) : (
-          <>
-            <Link to={`/coffre/${entry.uuid}/modifier`} className="btn btn-primary">
-              Modifier
-            </Link>
-            <Button variant="secondary" onClick={() => void act(() => vault.setFlags(entry, { favorite: !entry.favorite }))}>
-              {entry.favorite ? '☆ Retirer des favoris' : '★ Favori'}
-            </Button>
-            <Button variant="secondary" onClick={() => void act(() => vault.setFlags(entry, { archived: !entry.archivedAt }))}>
-              {entry.archivedAt ? 'Désarchiver' : 'Archiver'}
-            </Button>
-            <Button variant="danger" onClick={() => void act(() => vault.trash(entry))}>
-              Mettre à la corbeille
-            </Button>
-          </>
-        )}
-      </footer>
     </article>
   )
 }

@@ -1,41 +1,57 @@
+import { Download, KeyRound, Lock, Printer, ShieldCheck, Smartphone } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import { Button, CopyButton } from '../../components/ui'
+import { Alert, Button, Checkbox, CopyButton } from '../../components/ui'
 import { estimatePasswordStrength } from '../../crypto'
 
-export function AuthLayout({ title, children, wide = false }: { title: string; children: ReactNode; wide?: boolean }) {
+export function AuthLayout({ title, subtitle, children, wide = false }: { title: string; subtitle?: ReactNode; children: ReactNode; wide?: boolean }) {
   return (
     <main className="auth-shell">
-      <section className={`card auth-card ${wide ? 'auth-wide' : ''}`} aria-labelledby="auth-title">
-        <img src="/brand/koffra-logo-256.png" alt="KOFFRA" className="auth-logo" width={160} height={107} />
-        <h1 id="auth-title">{title}</h1>
-        {children}
-      </section>
+      <div className={`auth-frame ${wide ? 'auth-wide' : ''}`}>
+        <aside className="auth-brand" aria-hidden>
+          <img src="/brand/koffra-logo-512.png" alt="" className="auth-brand-logo" />
+          <h2>Votre coffre-fort numérique privé</h2>
+          <ul>
+            <li>
+              <Lock className="icon" /> Chiffré dans votre navigateur
+            </li>
+            <li>
+              <ShieldCheck className="icon" /> Le serveur ne voit jamais vos secrets
+            </li>
+            <li>
+              <Smartphone className="icon" /> Ordinateur, tablette et téléphone
+            </li>
+          </ul>
+        </aside>
+        <section className="auth-card" aria-labelledby="auth-title">
+          <img src="/brand/koffra-logo-256.png" alt="KOFFRA" className="auth-logo" width={132} height={88} />
+          <header className="auth-head">
+            <h1 id="auth-title">{title}</h1>
+            {subtitle ? <p>{subtitle}</p> : null}
+          </header>
+          {children}
+        </section>
+      </div>
     </main>
   )
 }
 
-export const MIN_PASSWORD_LENGTH = 12
-
-/** Indicateur de robustesse (texte + barre : la couleur seule ne porte pas l'information). */
+/** Indicateur de robustesse : barre segmentée + texte (la couleur seule ne porte pas l'information). */
 export function StrengthMeter({ password }: { password: string }) {
   if (!password) return null
-  const { label, bits } = estimatePasswordStrength(password)
+  const { label } = estimatePasswordStrength(password)
   const level = { faible: 1, moyen: 2, fort: 3, 'très fort': 4 }[label]
   return (
-    <p className="strength" data-level={level}>
-      <span className="strength-bar" aria-hidden>
-        <span style={{ width: `${level * 25}%` }} />
+    <div className="strength" data-level={level} aria-live="polite">
+      <div className="strength-bars" aria-hidden>
+        {[1, 2, 3, 4].map((i) => (
+          <span key={i} className={i <= level ? 'on' : ''} />
+        ))}
+      </div>
+      <span>
+        Robustesse : <strong>{label}</strong>
       </span>
-      Robustesse : <strong>{label}</strong> (≈ {bits} bits)
-    </p>
+    </div>
   )
-}
-
-export function validateNewPassword(password: string, confirm: string): string | null {
-  if (password.length < MIN_PASSWORD_LENGTH) return `Au moins ${MIN_PASSWORD_LENGTH} caractères.`
-  if (estimatePasswordStrength(password).label === 'faible') return 'Mot de passe trop faible : allongez-le (une phrase de plusieurs mots convient bien).'
-  if (password !== confirm) return 'Les deux mots de passe ne correspondent pas.'
-  return null
 }
 
 /** Affichage unique de la clé de récupération : l'utilisateur doit confirmer l'avoir conservée. */
@@ -54,26 +70,24 @@ export function RecoveryKeyNotice({ recoveryKey, onDone }: { recoveryKey: string
 
   return (
     <div className="stack">
-      <div className="alert alert-warning">
-        <strong>Votre clé de récupération (affichée une seule fois)</strong>
-        <p>Sans elle ni votre mot de passe, vos données seront définitivement perdues : personne, pas même l’administrateur du serveur, ne peut les déchiffrer.</p>
+      <Alert kind="warning" title="Votre clé de récupération — affichée une seule fois">
+        Sans elle ni votre mot de passe, vos données seront définitivement perdues : personne, pas même l’administrateur du serveur, ne peut les déchiffrer.
+      </Alert>
+      <div className="recovery-key" translate="no">
+        <KeyRound className="icon" aria-hidden />
+        <span>{recoveryKey}</span>
       </div>
-      <p className="recovery-key" translate="no">
-        {recoveryKey}
-      </p>
-      <div className="row">
-        <CopyButton value={recoveryKey} label="Copier" />
-        <Button variant="secondary" onClick={download}>
+      <div className="row wrap">
+        <CopyButton value={recoveryKey} label="Copier" compact={false} />
+        <Button variant="secondary" size="sm" icon={Download} onClick={download}>
           Télécharger
         </Button>
-        <Button variant="secondary" onClick={() => window.print()}>
+        <Button variant="secondary" size="sm" icon={Printer} onClick={() => window.print()}>
           Imprimer
         </Button>
       </div>
-      <label className="checkbox">
-        <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} /> J’ai conservé ma clé de récupération en lieu sûr, hors ligne.
-      </label>
-      <Button onClick={onDone} disabled={!saved}>
+      <Checkbox checked={saved} onChange={(e) => setSaved(e.target.checked)} label="J’ai conservé ma clé de récupération en lieu sûr, hors ligne." />
+      <Button onClick={onDone} disabled={!saved} className="btn-block">
         Continuer
       </Button>
     </div>

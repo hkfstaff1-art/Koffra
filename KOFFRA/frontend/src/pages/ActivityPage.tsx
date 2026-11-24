@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
-import { Button, Spinner, formatDate } from '../components/ui'
+import { formatDate } from '../components/format'
+import { Button, PageHeader, Spinner } from '../components/ui'
 import { koffra } from '../services/api/koffra'
 
 const LABELS: Record<string, string> = {
@@ -47,9 +49,9 @@ export function ActivityPage() {
   const log = useQuery({ queryKey: ['activity', page], queryFn: () => koffra.activity(page) })
 
   return (
-    <div className="card stack">
-      <h1>Journal d’activité</h1>
-      <p className="field-hint">Aucune valeur secrète n’est jamais journalisée.</p>
+    <div className="stack-lg">
+      <PageHeader title="Journal d’activité" description="Connexions, appareils et modifications. Aucune valeur secrète n’est jamais journalisée." />
+      <div className="card table-card">
       {log.isPending ? <Spinner /> : null}
       <table className="table">
         <thead>
@@ -77,16 +79,17 @@ export function ActivityPage() {
           ))}
         </tbody>
       </table>
+      </div>
       {log.data ? (
-        <div className="row">
-          <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            ← Précédent
+        <div className="pager">
+          <Button variant="secondary" size="sm" icon={ChevronLeft} disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            Précédent
           </Button>
           <span>
             Page {log.data.meta.current_page} / {log.data.meta.last_page}
           </span>
-          <Button variant="secondary" disabled={page >= log.data.meta.last_page} onClick={() => setPage((p) => p + 1)}>
-            Suivant →
+          <Button variant="secondary" size="sm" disabled={page >= log.data.meta.last_page} onClick={() => setPage((p) => p + 1)}>
+            Suivant <ChevronRight className="icon" aria-hidden />
           </Button>
         </div>
       ) : null}

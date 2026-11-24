@@ -1,44 +1,82 @@
-import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
-import { ApiError } from '../services/api/client'
-import { CryptoError } from '../crypto'
+import {
+  AlertCircle,
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  Copy,
+  Eye,
+  EyeOff,
+  Info,
+  Loader2,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from 'react'
+
+type Variant = 'primary' | 'secondary' | 'danger' | 'ghost'
 
 export function Button({
   variant = 'primary',
+  size = 'md',
   busy = false,
+  icon: Icon,
   children,
+  className,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost'; busy?: boolean }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: 'sm' | 'md'; busy?: boolean; icon?: LucideIcon }) {
   return (
-    <button type="button" {...props} className={`btn btn-${variant} ${props.className ?? ''}`} disabled={props.disabled || busy} aria-busy={busy}>
-      {busy ? <span className="spinner" aria-hidden /> : null}
+    <button
+      type="button"
+      {...props}
+      className={`btn btn-${variant} btn-${size} ${children ? '' : 'btn-icon-only'} ${className ?? ''}`}
+      disabled={props.disabled || busy}
+      aria-busy={busy || undefined}
+    >
+      {busy ? <Loader2 className="icon spin" aria-hidden /> : Icon ? <Icon className="icon" aria-hidden /> : null}
       {children}
     </button>
   )
 }
 
-export function Field({
-  label,
-  hint,
-  error,
-  children,
-}: {
+/** Bouton composé d'une seule icône : libellé accessible obligatoire. */
+export function IconButton({ icon, label, ...props }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & { icon: LucideIcon; label: string; variant?: Variant }) {
+  return <Button variant="ghost" size="sm" icon={icon} aria-label={label} title={label} {...props} />
+}
+
+interface FieldProps {
   label: string
   hint?: ReactNode
   error?: string | null
-  children: (id: string, describedBy: string | undefined) => ReactNode
-}) {
+  required?: boolean
+  children: (props: { id: string; 'aria-describedby'?: string; 'aria-invalid'?: true; required?: boolean }) => ReactNode
+}
+
+export function Field({ label, hint, error, required, children }: FieldProps) {
   const id = useId()
-  const hintId = hint || error ? `${id}-hint` : undefined
+  const describedBy = error || hint ? `${id}-desc` : undefined
   return (
-    <div className="field">
-      <label htmlFor={id}>{label}</label>
-      {children(id, hintId)}
+    <div className={`field ${error ? 'has-error' : ''}`}>
+      <label htmlFor={id}>
+        {label}
+        {required ? <span className="required" aria-hidden> *</span> : null}
+      </label>
+      {children({ id, 'aria-describedby': describedBy, 'aria-invalid': error ? true : undefined, required })}
       {error ? (
-        <p id={hintId} className="field-error" role="alert">
-          {error}
+        <p id={describedBy} className="field-error">
+          <AlertCircle className="icon-sm" aria-hidden /> {error}
         </p>
       ) : hint ? (
-        <p id={hintId} className="field-hint">
+        <p id={describedBy} className="field-hint">
           {hint}
         </p>
       ) : null}
@@ -46,32 +84,39 @@ export function Field({
   )
 }
 
-export function TextInput({ label, hint, error, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: ReactNode; error?: string | null }) {
+type InputProps = InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: ReactNode; error?: string | null; icon?: LucideIcon }
+
+export function TextInput({ label, hint, error, required, icon: Icon, ...props }: InputProps) {
   return (
-    <Field label={label} hint={hint} error={error}>
-      {(id, describedBy) => <input id={id} aria-describedby={describedBy} aria-invalid={error ? true : undefined} {...props} />}
+    <Field label={label} hint={hint} error={error} required={required}>
+      {(a) => (
+        <div className={`input-wrap ${Icon ? 'has-lead' : ''}`}>
+          {Icon ? <Icon className="input-lead" aria-hidden /> : null}
+          <input {...a} {...props} />
+        </div>
+      )}
     </Field>
   )
 }
 
-/** Champ secret masqué par défaut, avec bouton afficher/masquer. */
-export function PasswordInput({ label, hint, error, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: ReactNode; error?: string | null }) {
+/** Champ secret : bouton afficher/masquer intégré au champ, à droite. */
+export function PasswordInput({ label, hint, error, required, icon: Icon, ...props }: InputProps) {
   const [visible, setVisible] = useState(false)
   return (
-    <Field label={label} hint={hint} error={error}>
-      {(id, describedBy) => (
-        <div className="input-row">
-          <input
-            id={id}
-            type={visible ? 'text' : 'password'}
-            autoComplete="off"
-            spellCheck={false}
-            aria-describedby={describedBy}
-            aria-invalid={error ? true : undefined}
-            {...props}
-          />
-          <button type="button" className="btn btn-ghost icon-btn" onClick={() => setVisible((v) => !v)} aria-label={visible ? 'Masquer' : 'Afficher'}>
-            {visible ? '🙈' : '👁'}
+    <Field label={label} hint={hint} error={error} required={required}>
+      {(a) => (
+        <div className={`input-wrap has-trail ${Icon ? 'has-lead' : ''}`}>
+          {Icon ? <Icon className="input-lead" aria-hidden /> : null}
+          <input {...a} type={visible ? 'text' : 'password'} autoComplete="off" spellCheck={false} autoCapitalize="off" {...props} />
+          <button
+            type="button"
+            className="input-trail"
+            onClick={() => setVisible((v) => !v)}
+            aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+            aria-pressed={visible}
+            title={visible ? 'Masquer' : 'Afficher'}
+          >
+            {visible ? <EyeOff className="icon" aria-hidden /> : <Eye className="icon" aria-hidden />}
           </button>
         </div>
       )}
@@ -79,10 +124,39 @@ export function PasswordInput({ label, hint, error, ...props }: InputHTMLAttribu
   )
 }
 
+export function TextArea({ label, hint, error, required, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; hint?: ReactNode; error?: string | null }) {
+  return (
+    <Field label={label} hint={hint} error={error} required={required}>
+      {(a) => <textarea {...a} rows={4} {...props} />}
+    </Field>
+  )
+}
+
+export function SelectField({ label, hint, error, required, children, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { label: string; hint?: ReactNode; error?: string | null }) {
+  return (
+    <Field label={label} hint={hint} error={error} required={required}>
+      {(a) => (
+        <select {...a} {...props}>
+          {children}
+        </select>
+      )}
+    </Field>
+  )
+}
+
+export function Checkbox({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: ReactNode }) {
+  return (
+    <label className="checkbox">
+      <input type="checkbox" {...props} />
+      <span>{label}</span>
+    </label>
+  )
+}
+
 const CLIPBOARD_CLEAR_MS = 30_000
 
 /** Copie dans le presse-papiers puis tente de l'effacer après 30 s (si le navigateur l'autorise). */
-export function CopyButton({ value, label = 'Copier' }: { value: string; label?: string }) {
+export function CopyButton({ value, label = 'Copier', compact = true }: { value: string; label?: string; compact?: boolean }) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(timer.current), [])
@@ -105,10 +179,11 @@ export function CopyButton({ value, label = 'Copier' }: { value: string; label?:
     }
   }
 
+  const text = copied ? 'Copié · effacé dans 30 s' : label
   return (
-    <button type="button" className="btn btn-ghost btn-small" onClick={copy} aria-live="polite">
-      {copied ? '✓ Copié (effacé dans 30 s)' : label}
-    </button>
+    <Button variant="ghost" size="sm" icon={copied ? Check : Copy} onClick={copy} aria-label={text} title={text} className={copied ? 'is-success' : ''}>
+      {compact ? null : text}
+    </Button>
   )
 }
 
@@ -120,40 +195,90 @@ export function SecretValue({ value, onReveal }: { value: string; onReveal?: () 
     setShown((s) => !s)
   }
   return (
-    <span className="secret">
-      <code className={shown ? '' : 'masked'}>{shown ? value : '••••••••••••'}</code>
-      <button type="button" className="btn btn-ghost btn-small" onClick={toggle}>
-        {shown ? 'Masquer' : 'Afficher'}
-      </button>
+    <span className="value-row">
+      <code className={`secret ${shown ? '' : 'masked'}`}>{shown ? value : '••••••••••••'}</code>
+      <IconButton icon={shown ? EyeOff : Eye} label={shown ? 'Masquer' : 'Afficher'} onClick={toggle} />
       <CopyButton value={value} />
     </span>
   )
 }
 
-export function Alert({ kind = 'info', children }: { kind?: 'info' | 'success' | 'warning' | 'error'; children: ReactNode }) {
+const ALERT_ICONS: Record<string, LucideIcon> = { info: Info, success: CheckCircle2, warning: AlertTriangle, error: AlertCircle }
+
+export function Alert({ kind = 'info', title, children }: { kind?: 'info' | 'success' | 'warning' | 'error'; title?: string; children?: ReactNode }) {
+  const Icon = ALERT_ICONS[kind]!
   return (
     <div className={`alert alert-${kind}`} role={kind === 'error' ? 'alert' : 'status'}>
-      {children}
+      <Icon className="alert-icon" aria-hidden />
+      <div className="alert-body">
+        {title ? <strong>{title}</strong> : null}
+        {children ? <div>{children}</div> : null}
+      </div>
     </div>
   )
 }
 
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({
+  title,
+  description,
+  icon: Icon,
+  tone = 'default',
+  onClose,
+  children,
+  footer,
+  size = 'md',
+}: {
+  title: string
+  description?: ReactNode
+  icon?: LucideIcon
+  tone?: 'default' | 'danger' | 'warning'
+  onClose: () => void
+  children?: ReactNode
+  footer?: ReactNode
+  size?: 'sm' | 'md' | 'lg'
+}) {
   const ref = useRef<HTMLDialogElement>(null)
+  const titleId = useId()
   useEffect(() => {
     const dialog = ref.current
-    dialog?.showModal?.()
-    return () => dialog?.close?.()
+    if (dialog && !dialog.open) {
+      // Repli pour les navigateurs (et jsdom) sans showModal : ouverture simple.
+      if (typeof dialog.showModal === 'function') dialog.showModal()
+      else dialog.setAttribute('open', '')
+    }
+    return () => {
+      if (typeof dialog?.close === 'function') dialog.close()
+      else dialog?.removeAttribute('open')
+    }
   }, [])
+
   return (
-    <dialog ref={ref} className="modal" aria-label={title} onCancel={(e) => (e.preventDefault(), onClose())}>
-      <div className="modal-head">
-        <h2>{title}</h2>
-        <button type="button" className="btn btn-ghost icon-btn" onClick={onClose} aria-label="Fermer">
-          ✕
-        </button>
+    <dialog
+      ref={ref}
+      className={`modal modal-${size}`}
+      aria-labelledby={titleId}
+      onCancel={(e) => {
+        e.preventDefault()
+        onClose()
+      }}
+      onClick={(e) => e.target === ref.current && onClose()}
+    >
+      <div className="modal-panel">
+        <header className="modal-head">
+          {Icon ? (
+            <span className={`modal-icon tone-${tone}`}>
+              <Icon aria-hidden />
+            </span>
+          ) : null}
+          <div>
+            <h2 id={titleId}>{title}</h2>
+            {description ? <p className="modal-desc">{description}</p> : null}
+          </div>
+          <IconButton icon={X} label="Fermer" onClick={onClose} className="modal-close" />
+        </header>
+        {children ? <div className="modal-body">{children}</div> : null}
+        {footer ? <footer className="modal-foot">{footer}</footer> : null}
       </div>
-      {children}
     </dialog>
   )
 }
@@ -161,23 +286,35 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
 export function Spinner({ label = 'Chargement…' }: { label?: string }) {
   return (
     <p className="loading" role="status">
-      <span className="spinner" aria-hidden /> {label}
+      <Loader2 className="icon spin" aria-hidden /> {label}
     </p>
   )
 }
 
-/** Message d'erreur lisible, sans détail technique ni donnée sensible. */
-export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    const details = error.validationMessages
-    return details.length ? details.join(' ') : error.message
-  }
-  if (error instanceof CryptoError) return error.message
-  if (error instanceof TypeError) return 'Serveur injoignable. Vérifiez votre connexion.'
-  return 'Une erreur inattendue est survenue.'
+export function EmptyState({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children?: ReactNode }) {
+  return (
+    <div className="empty-state">
+      <span className="empty-icon">
+        <Icon aria-hidden />
+      </span>
+      <strong>{title}</strong>
+      {children ? <div className="empty-text">{children}</div> : null}
+    </div>
+  )
 }
 
-export function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
+export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'blue' | 'green' | 'amber' | 'red'; children: ReactNode }) {
+  return <span className={`badge badge-${tone}`}>{children}</span>
+}
+
+export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+  return (
+    <header className="page-header">
+      <div>
+        <h1>{title}</h1>
+        {description ? <p className="page-desc">{description}</p> : null}
+      </div>
+      {actions ? <div className="page-actions">{actions}</div> : null}
+    </header>
+  )
 }

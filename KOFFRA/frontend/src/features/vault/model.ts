@@ -1,3 +1,5 @@
+import { Building2, Contact, KeyRound, KeySquare, Landmark, Mail, Package, StickyNote, type LucideIcon } from 'lucide-react'
+
 /**
  * Modèle des entrées du coffre (contenu du payload chiffré, docs/01 §3).
  * Tout ce qui est ici est chiffré avant de quitter le navigateur.
@@ -13,10 +15,10 @@ export interface FieldDef {
   inputType?: 'text' | 'email' | 'url' | 'tel'
 }
 
-export const ITEM_TYPES: Record<ItemType, { label: string; icon: string; fields: FieldDef[] }> = {
+export const ITEM_TYPES: Record<ItemType, { label: string; icon: LucideIcon; fields: FieldDef[] }> = {
   login: {
     label: 'Compte et mot de passe',
-    icon: '🔑',
+    icon: KeyRound,
     fields: [
       { key: 'url', label: 'Adresse du service', inputType: 'url' },
       { key: 'username', label: 'Identifiant' },
@@ -26,7 +28,7 @@ export const ITEM_TYPES: Record<ItemType, { label: string; icon: string; fields:
   },
   email: {
     label: 'Email ou réseau social',
-    icon: '✉️',
+    icon: Mail,
     fields: [
       { key: 'url', label: 'Adresse du service', inputType: 'url' },
       { key: 'username', label: 'Adresse ou identifiant' },
@@ -36,7 +38,7 @@ export const ITEM_TYPES: Record<ItemType, { label: string; icon: string; fields:
   },
   saas: {
     label: 'Accès professionnel / SaaS',
-    icon: '🏢',
+    icon: Building2,
     fields: [
       { key: 'url', label: 'Adresse', inputType: 'url' },
       { key: 'username', label: 'Identifiant' },
@@ -46,7 +48,7 @@ export const ITEM_TYPES: Record<ItemType, { label: string; icon: string; fields:
   },
   api: {
     label: 'Clé API, token, certificat',
-    icon: '🧩',
+    icon: KeySquare,
     fields: [
       { key: 'service', label: 'Service' },
       { key: 'key_id', label: 'Identifiant de clé' },
@@ -56,7 +58,7 @@ export const ITEM_TYPES: Record<ItemType, { label: string; icon: string; fields:
   },
   contact: {
     label: 'Contact client / fournisseur',
-    icon: '👤',
+    icon: Contact,
     fields: [
       { key: 'company', label: 'Entreprise' },
       { key: 'phone', label: 'Téléphone', inputType: 'tel' },
@@ -66,7 +68,7 @@ export const ITEM_TYPES: Record<ItemType, { label: string; icon: string; fields:
   },
   bank: {
     label: 'Référence bancaire (non sensible)',
-    icon: '🏦',
+    icon: Landmark,
     fields: [
       { key: 'bank', label: 'Banque / opérateur' },
       { key: 'holder', label: 'Titulaire' },
@@ -74,8 +76,8 @@ export const ITEM_TYPES: Record<ItemType, { label: string; icon: string; fields:
       { key: 'card_last4', label: '4 derniers chiffres de carte' },
     ],
   },
-  note: { label: 'Note privée', icon: '📝', fields: [] },
-  other: { label: 'Autre', icon: '📦', fields: [] },
+  note: { label: 'Note privée', icon: StickyNote, fields: [] },
+  other: { label: 'Autre', icon: Package, fields: [] },
 }
 
 export interface CustomField {

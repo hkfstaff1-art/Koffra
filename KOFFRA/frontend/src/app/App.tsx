@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { FeedbackProvider } from '../components/feedback'
 import { Spinner } from '../components/ui'
 import { VaultProvider } from '../features/vault/VaultProvider'
 import { ActivityPage } from '../pages/ActivityPage'
@@ -9,6 +10,7 @@ import { CategoriesPage } from '../pages/CategoriesPage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { DevicesPage } from '../pages/DevicesPage'
 import { GeneratorPage } from '../pages/GeneratorPage'
+import { MenuPage } from '../pages/MenuPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { InstallPage } from '../pages/auth/InstallPage'
 import { InvitationPage } from '../pages/auth/InvitationPage'
@@ -22,9 +24,17 @@ import { AppLayout } from './AppLayout'
 import { ReauthProvider } from './reauth'
 import { SessionProvider, useSession } from './session'
 
+function FullPageSpinner() {
+  return (
+    <div className="auth-shell">
+      <Spinner label="Chargement de KOFFRA…" />
+    </div>
+  )
+}
+
 function PublicRoutes() {
   const status = useQuery({ queryKey: ['setup-status'], queryFn: koffra.setupStatus })
-  if (status.isPending) return <Spinner />
+  if (status.isPending) return <FullPageSpinner />
   const installed = status.data?.installed ?? true
 
   return (
@@ -56,6 +66,7 @@ function PrivateRoutes() {
             <Route path="administrateurs" element={<AdminsPage />} />
             <Route path="journal" element={<ActivityPage />} />
             <Route path="parametres" element={<SettingsPage />} />
+            <Route path="menu" element={<MenuPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
@@ -66,7 +77,7 @@ function PrivateRoutes() {
 
 function Gate() {
   const { phase } = useSession()
-  if (phase === 'loading') return <Spinner />
+  if (phase === 'loading') return <FullPageSpinner />
   if (phase === 'anonymous') return <PublicRoutes />
   if (phase === 'locked') return <UnlockPage />
   return <PrivateRoutes />
@@ -79,9 +90,11 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <SessionProvider>
-          <Gate />
-        </SessionProvider>
+        <FeedbackProvider>
+          <SessionProvider>
+            <Gate />
+          </SessionProvider>
+        </FeedbackProvider>
       </BrowserRouter>
     </QueryClientProvider>
   )

@@ -1,6 +1,8 @@
+import { ShieldCheck } from 'lucide-react'
 import { createContext, useCallback, useContext, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { prepareLogin, wipe } from '../crypto'
-import { Alert, Button, Modal, PasswordInput, errorMessage } from '../components/ui'
+import { errorMessage } from '../components/format'
+import { Button, Modal, PasswordInput } from '../components/ui'
 import { ApiError } from '../services/api/client'
 import { koffra } from '../services/api/koffra'
 import { useSession } from './session'
@@ -47,6 +49,7 @@ export function ReauthProvider({ children }: { children: ReactNode }) {
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (!me) return
+    if (!password) return setError('Saisissez votre mot de passe.')
     setBusy(true)
     setError(null)
     try {
@@ -77,11 +80,15 @@ export function ReauthProvider({ children }: { children: ReactNode }) {
     <ReauthContext.Provider value={{ withReauth, confirmPassword: ask }}>
       {children}
       {open ? (
-        <Modal title="Confirmez votre mot de passe" onClose={() => close(false)}>
-          <form onSubmit={submit} className="stack">
-            <p>Cette action est sensible : confirmez votre identité.</p>
-            {error ? <Alert kind="error">{error}</Alert> : null}
-            <PasswordInput label="Mot de passe" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus required />
+        <Modal
+          size="sm"
+          icon={ShieldCheck}
+          title="Confirmez votre identité"
+          description="Action sensible : saisissez à nouveau votre mot de passe."
+          onClose={() => close(false)}
+        >
+          <form onSubmit={submit} className="stack" noValidate>
+            <PasswordInput label="Mot de passe" value={password} onChange={(e) => setPassword(e.target.value)} error={error} autoFocus autoComplete="current-password" />
             <div className="row-end">
               <Button variant="secondary" onClick={() => close(false)}>
                 Annuler

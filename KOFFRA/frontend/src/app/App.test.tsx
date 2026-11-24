@@ -19,7 +19,9 @@ describe('App — routage selon l’état de session', () => {
     mockApi({ '/me': { status: 401, body: { message: 'Unauthenticated.' } }, '/setup/status': { status: 200, body: { installed: true } } })
     render(<App />)
     expect(await screen.findByRole('heading', { name: 'Connexion' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Mot de passe')).toHaveAttribute('type', 'password')
+    expect(screen.getByLabelText(/^Mot de passe/, { selector: 'input' })).toHaveAttribute('type', 'password')
+    // Bouton « œil » intégré au champ, avec libellé accessible
+    expect(screen.getByRole('button', { name: 'Afficher le mot de passe' })).toBeInTheDocument()
   })
 
   it('session serveur valide mais clés absentes : demande le déverrouillage, jamais le coffre', async () => {

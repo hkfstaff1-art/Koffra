@@ -1,21 +1,41 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Alert, Button, Modal, PasswordInput, errorMessage } from '../components/ui'
+import { Download, Fingerprint, KeyRound, Lock, RefreshCcw, ShieldAlert, Timer, Upload } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { z } from 'zod'
+import { useFeedback } from '../components/feedback'
+import { errorMessage } from '../components/format'
+import { Alert, Button, Modal, PageHeader, PasswordInput, SelectField } from '../components/ui'
+import { newPasswordSchema, rules, validate, type FieldErrors } from '../components/validation'
 import { changePassword, prepareLogin, publicKeyFingerprint, regenerateRecoveryKey, wipe } from '../crypto'
 import { useReauth } from '../app/reauth'
 import { useSession } from '../app/session'
 import { koffra, toApiPassword, toApiRecovery } from '../services/api/koffra'
 import { buildEncryptedExport, importEncryptedExport, rotateVaultKey } from '../features/vault/operations'
 import { useVault } from '../features/vault/VaultProvider'
-import { RecoveryKeyNotice, StrengthMeter, validateNewPassword } from './auth/AuthLayout'
+import { RecoveryKeyNotice, StrengthMeter } from './auth/AuthLayout'
 
-type Msg = { kind: 'success' | 'error' | 'warning'; text: string } | null
+function Section({ icon: Icon, title, description, children }: { icon: typeof Lock; title: string; description?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="card settings-section">
+      <header>
+        <span className="section-icon" aria-hidden>
+          <Icon />
+        </span>
+        <div>
+          <h2>{title}</h2>
+          {description ? <p className="muted">{description}</p> : null}
+        </div>
+      </header>
+      <div className="stack">{children}</div>
+    </section>
+  )
+}
 
 export function SettingsPage() {
   const { me, account, vaultKeys, currentKey, autoLockMinutes, setAutoLockMinutes, refresh } = useSession()
   const { withReauth } = useReauth()
+  const { toast, confirm } = useFeedback()
   const vault = useVault()
   const [fingerprint, setFingerprint] = useState('')
-  const [msg, setMsg] = useState<Msg>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [newRecovery, setNewRecovery] = useState<string | null>(null)
   const [progress, setProgress] = useState('')
@@ -26,11 +46,12 @@ export function SettingsPage() {
 
   const run = async (name: string, fn: () => Promise<void>) => {
     setBusy(name)
-    setMsg(null)
     try {
       await fn()
+      return true
     } catch (err) {
-      setMsg({ kind: 'error', text: errorMessage(err) })
+      toast('error', errorMessage(err))
+      return false
     } finally {
       setBusy(null)
       setProgress('')
@@ -38,28 +59,22 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="stack">
-      <h1>Paramètres et sécurité</h1>
-      {msg ? <Alert kind={msg.kind}>{msg.text}</Alert> : null}
+    <div className="stack-lg narrow">
+      <PageHeader title="Paramètres et sécurité" />
 
-      <section className="card stack">
-        <h2>Mon empreinte de sécurité</h2>
-        <p>À communiquer à un autre administrateur lorsqu’il vous transmet l’accès au coffre.</p>
+      <Section icon={Fingerprint} title="Mon empreinte de sécurité" description="À communiquer à un administrateur lorsqu’il vous transmet l’accès au coffre.">
         <p className="fingerprint">{fingerprint}</p>
-      </section>
+      </Section>
 
-      <section className="card stack">
-        <h2>Verrouillage automatique</h2>
-        <label htmlFor="autolock">Verrouiller le coffre après</label>
-        <select id="autolock" value={autoLockMinutes} onChange={(e) => setAutoLockMinutes(Number(e.target.value))}>
+      <Section icon={Timer} title="Verrouillage automatique" description="Le coffre se verrouille aussi à la fermeture de l’onglet.">
+        <SelectField label="Verrouiller après" value={autoLockMinutes} onChange={(e) => setAutoLockMinutes(Number(e.target.value))}>
           {[1, 2, 5, 10, 15, 30].map((m) => (
             <option key={m} value={m}>
               {m} minute{m > 1 ? 's' : ''} d’inactivité
             </option>
           ))}
-        </select>
-        <p className="field-hint">Le coffre se verrouille aussi à la fermeture de l’onglet.</p>
-      </section>
+        </SelectField>
+      </Section>
 
       <PasswordChange
         busy={busy === 'password'}
@@ -72,29 +87,31 @@ export function SettingsPage() {
             const material = await changePassword(account, next, { ops: me.keys.kdf_params.ops, mem: me.keys.kdf_params.mem })
             await koffra.changePassword(toApiPassword(material))
             await refresh()
-            setMsg({ kind: 'success', text: 'Mot de passe modifié. Vos autres sessions ont été fermées.' })
+            toast('success', 'Mot de passe modifié. Vos autres sessions ont été fermées.')
           })
         }
       />
 
-      <section className="card stack">
-        <h2>Clé de récupération</h2>
-        <p>Générez une nouvelle clé si vous avez perdu l’ancienne ou pensez qu’elle a été vue. L’ancienne cessera de fonctionner.</p>
-        <Button
-          variant="secondary"
-          busy={busy === 'recovery'}
-          onClick={() =>
-            run('recovery', async () => {
-              if (!account) return
-              const { recovery, recoveryKey } = await regenerateRecoveryKey(account)
-              await withReauth(() => koffra.regenerateRecovery(toApiRecovery(recovery)))
-              setNewRecovery(recoveryKey)
-            })
-          }
-        >
-          Générer une nouvelle clé de récupération
-        </Button>
-      </section>
+      <Section icon={KeyRound} title="Clé de récupération" description="Générez une nouvelle clé si vous avez perdu l’ancienne ou pensez qu’elle a été vue. L’ancienne cessera de fonctionner.">
+        <div>
+          <Button
+            variant="secondary"
+            icon={RefreshCcw}
+            busy={busy === 'recovery'}
+            onClick={async () => {
+              if (!(await confirm({ title: 'Remplacer la clé de récupération ?', message: 'L’ancienne clé ne fonctionnera plus.', confirmLabel: 'Générer une nouvelle clé', tone: 'warning' }))) return
+              await run('recovery', async () => {
+                if (!account) return
+                const { recovery, recoveryKey } = await regenerateRecoveryKey(account)
+                await withReauth(() => koffra.regenerateRecovery(toApiRecovery(recovery)))
+                setNewRecovery(recoveryKey)
+              })
+            }}
+          >
+            Générer une nouvelle clé
+          </Button>
+        </div>
+      </Section>
 
       <ExportImport
         busy={busy}
@@ -108,7 +125,7 @@ export function SettingsPage() {
             a.download = `koffra-export-${new Date().toISOString().slice(0, 10)}.koffra.json`
             a.click()
             URL.revokeObjectURL(url)
-            setMsg({ kind: 'success', text: 'Export chiffré téléchargé. Conservez la phrase d’export séparément du fichier.' })
+            toast('success', 'Export chiffré téléchargé. Conservez la phrase d’export séparément du fichier.')
           })
         }
         onImport={(file, passphrase) =>
@@ -117,46 +134,61 @@ export function SettingsPage() {
             const parsed: unknown = JSON.parse(await file.text())
             const res = await importEncryptedExport(parsed, passphrase, currentKey, (d, t) => setProgress(`${d}/${t}`))
             await vault.reload()
-            setMsg({ kind: 'success', text: `Import terminé : ${res.items} entrée(s), ${res.categories} catégorie(s).` })
+            toast('success', `Import terminé : ${res.items} entrée(s), ${res.categories} catégorie(s).`)
           })
         }
       />
 
-      <section className="card stack">
-        <h2>Rotation de la clé du coffre</h2>
-        <p>Recommandée après la désactivation d’un administrateur : toutes les données sont re-chiffrées avec une nouvelle clé. Ce que l’ancien administrateur a pu voir reste compromis.</p>
-        {progress && busy === 'rotation' ? <p role="status">Re-chiffrement : {progress}</p> : null}
-        <Button
-          variant="secondary"
-          busy={busy === 'rotation'}
-          disabled={!currentKey}
-          onClick={() =>
-            window.confirm('Re-chiffrer tout le coffre avec une nouvelle clé ? Ne fermez pas la page pendant l’opération.') &&
-            run('rotation', async () => {
-              if (!account || !currentKey) return
-              const admins = await koffra.admins()
-              const version = await withReauth(() => rotateVaultKey(account, vaultKeys, currentKey.version, admins.data, (d, t) => setProgress(`${d}/${t}`)))
-              await refresh()
-              setMsg({ kind: 'success', text: `Rotation terminée : clé du coffre version ${version}.` })
-            })
-          }
-        >
-          Lancer la rotation
-        </Button>
-      </section>
+      <Section
+        icon={RefreshCcw}
+        title="Rotation de la clé du coffre"
+        description="Recommandée après la désactivation d’un administrateur : toutes les données sont re-chiffrées avec une nouvelle clé."
+      >
+        {progress && busy === 'rotation' ? (
+          <div className="progress" role="status">
+            Re-chiffrement : {progress}
+          </div>
+        ) : null}
+        <div>
+          <Button
+            variant="secondary"
+            icon={RefreshCcw}
+            busy={busy === 'rotation'}
+            disabled={!currentKey}
+            onClick={async () => {
+              if (
+                !(await confirm({
+                  title: 'Re-chiffrer tout le coffre ?',
+                  message: 'Une nouvelle clé sera créée et toutes les entrées re-chiffrées. Ne fermez pas la page pendant l’opération.',
+                  confirmLabel: 'Lancer la rotation',
+                  tone: 'warning',
+                }))
+              )
+                return
+              await run('rotation', async () => {
+                if (!account || !currentKey) return
+                const admins = await koffra.admins()
+                const version = await withReauth(() => rotateVaultKey(account, vaultKeys, currentKey.version, admins.data, (d, t) => setProgress(`${d}/${t}`)))
+                await refresh()
+                toast('success', `Rotation terminée : clé du coffre version ${version}.`)
+              })
+            }}
+          >
+            Lancer la rotation
+          </Button>
+        </div>
+      </Section>
 
-      <section className="card stack">
-        <h2>Limites de sécurité</h2>
-        <ul>
+      <Section icon={ShieldAlert} title="Limites de sécurité">
+        <ul className="bullets">
           <li>KOFFRA n’est ni inviolable ni certifié : un appareil compromis ou laissé déverrouillé peut exposer vos données.</li>
           <li>Ne stockez jamais de code PIN, CVV, mot de passe de paiement ni code OTP bancaire.</li>
           <li>Sans mot de passe ni clé de récupération, les données sont définitivement perdues.</li>
-          <li>Un audit de sécurité indépendant est requis avant d’y stocker des données réelles.</li>
         </ul>
-      </section>
+      </Section>
 
       {newRecovery ? (
-        <Modal title="Nouvelle clé de récupération" onClose={() => setNewRecovery(null)}>
+        <Modal icon={KeyRound} title="Nouvelle clé de récupération" onClose={() => setNewRecovery(null)} size="lg">
           <RecoveryKeyNotice recoveryKey={newRecovery} onDone={() => setNewRecovery(null)} />
         </Modal>
       ) : null}
@@ -164,66 +196,99 @@ export function SettingsPage() {
   )
 }
 
-function PasswordChange({ busy, onSubmit }: { busy: boolean; onSubmit: (current: string, next: string) => Promise<void> }) {
-  const [current, setCurrent] = useState('')
-  const [next, setNext] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [error, setError] = useState<string | null>(null)
+const passwordChangeSchema = newPasswordSchema({ current: rules.currentPassword })
+
+function PasswordChange({ busy, onSubmit }: { busy: boolean; onSubmit: (current: string, next: string) => Promise<boolean> }) {
+  const [values, setValues] = useState({ current: '', password: '', confirm: '' })
+  const [errors, setErrors] = useState<FieldErrors<typeof values>>({})
+  const set = (k: keyof typeof values) => (e: { target: { value: string } }) => setValues((v) => ({ ...v, [k]: e.target.value }))
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    const invalid = validateNewPassword(next, confirm)
-    if (invalid) return setError(invalid)
-    setError(null)
-    await onSubmit(current, next)
-    setCurrent('')
-    setNext('')
-    setConfirm('')
+    const invalid = validate(passwordChangeSchema, values)
+    setErrors(invalid ?? {})
+    if (invalid) return
+    if (await onSubmit(values.current, values.password)) setValues({ current: '', password: '', confirm: '' })
   }
 
   return (
-    <form className="card stack" onSubmit={submit}>
-      <h2>Changer de mot de passe</h2>
-      {error ? <Alert kind="error">{error}</Alert> : null}
-      <PasswordInput label="Mot de passe actuel" value={current} onChange={(e) => setCurrent(e.target.value)} required autoComplete="current-password" />
-      <PasswordInput label="Nouveau mot de passe" value={next} onChange={(e) => setNext(e.target.value)} required autoComplete="new-password" />
-      <StrengthMeter password={next} />
-      <PasswordInput label="Confirmer" value={confirm} onChange={(e) => setConfirm(e.target.value)} required autoComplete="new-password" />
-      <Button type="submit" busy={busy}>
-        Changer le mot de passe
-      </Button>
-    </form>
+    <Section icon={Lock} title="Changer de mot de passe" description="Vos données ne sont pas re-chiffrées : seule l’enveloppe de votre clé change.">
+      <form className="stack" onSubmit={submit} noValidate>
+        <PasswordInput label="Mot de passe actuel" value={values.current} onChange={set('current')} error={errors.current} autoComplete="current-password" required />
+        <PasswordInput label="Nouveau mot de passe" value={values.password} onChange={set('password')} error={errors.password} autoComplete="new-password" required />
+        <StrengthMeter password={values.password} />
+        <PasswordInput label="Confirmer le nouveau mot de passe" value={values.confirm} onChange={set('confirm')} error={errors.confirm} autoComplete="new-password" required />
+        <div>
+          <Button type="submit" busy={busy}>
+            Changer le mot de passe
+          </Button>
+        </div>
+      </form>
+    </Section>
   )
 }
+
+const exportSchema = z.object({ passphrase: z.string().min(12, 'Au moins 12 caractères.') })
 
 function ExportImport({ busy, progress, onExport, onImport }: { busy: string | null; progress: string; onExport: (p: string) => void; onImport: (f: File, p: string) => void }) {
   const [exportPass, setExportPass] = useState('')
   const [importPass, setImportPass] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [errors, setErrors] = useState<{ export?: string; import?: string; file?: string }>({})
   const fileRef = useRef<HTMLInputElement>(null)
 
   return (
-    <section className="card stack">
-      <h2>Export et restauration chiffrés</h2>
-      <p>L’export est toujours chiffré par une phrase que vous choisissez (12 caractères minimum). Les pièces jointes ne sont pas incluses : elles sont couvertes par la sauvegarde du serveur.</p>
-      <PasswordInput label="Phrase d’export" value={exportPass} onChange={(e) => setExportPass(e.target.value)} autoComplete="new-password" />
-      <Button variant="secondary" busy={busy === 'export'} disabled={exportPass.length < 12} onClick={() => onExport(exportPass)}>
-        Télécharger l’export chiffré
-      </Button>
-      <hr />
-      <label htmlFor="import-file">Fichier d’export (.koffra.json)</label>
-      <input id="import-file" ref={fileRef} type="file" accept=".json,application/json" />
-      <PasswordInput label="Phrase de l’export à restaurer" value={importPass} onChange={(e) => setImportPass(e.target.value)} autoComplete="off" />
-      {progress && busy === 'import' ? <p role="status">Import : {progress}</p> : null}
-      <Button
-        variant="secondary"
-        busy={busy === 'import'}
-        onClick={() => {
-          const f = fileRef.current?.files?.[0]
-          if (f && importPass) onImport(f, importPass)
+    <Section icon={Download} title="Export et restauration chiffrés" description="L’export est toujours chiffré par une phrase que vous choisissez. Les pièces jointes sont couvertes par la sauvegarde du serveur.">
+      <form
+        className="stack"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault()
+          const invalid = validate(exportSchema, { passphrase: exportPass })
+          setErrors({ export: invalid?.passphrase })
+          if (!invalid) onExport(exportPass)
         }}
       >
-        Restaurer dans ce coffre
-      </Button>
-    </section>
+        <PasswordInput label="Phrase d’export" value={exportPass} onChange={(e) => setExportPass(e.target.value)} error={errors.export} hint="12 caractères minimum. Conservez-la séparément du fichier." autoComplete="new-password" />
+        <div>
+          <Button type="submit" variant="secondary" icon={Download} busy={busy === 'export'}>
+            Télécharger l’export chiffré
+          </Button>
+        </div>
+      </form>
+
+      <hr />
+
+      <form
+        className="stack"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault()
+          const next = { file: file ? undefined : 'Choisissez un fichier d’export.', import: importPass ? undefined : 'Saisissez la phrase de cet export.' }
+          setErrors(next)
+          if (file && importPass) onImport(file, importPass)
+        }}
+      >
+        <div className="field">
+          <label htmlFor="import-file">Fichier d’export (.koffra.json)</label>
+          <div className="file-picker">
+            <Button variant="secondary" size="sm" icon={Upload} onClick={() => fileRef.current?.click()}>
+              Choisir un fichier
+            </Button>
+            <span className="muted small">{file ? file.name : 'Aucun fichier choisi'}</span>
+            <input id="import-file" ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </div>
+          {errors.file ? <p className="field-error">{errors.file}</p> : null}
+        </div>
+        <PasswordInput label="Phrase de l’export à restaurer" value={importPass} onChange={(e) => setImportPass(e.target.value)} error={errors.import} autoComplete="off" />
+        {progress && busy === 'import' ? <div className="progress" role="status">Import : {progress}</div> : null}
+        <div>
+          <Button type="submit" variant="secondary" icon={Upload} busy={busy === 'import'}>
+            Restaurer dans ce coffre
+          </Button>
+        </div>
+      </form>
+      <Alert kind="info">Les entrées restaurées s’ajoutent au coffre existant ; rien n’est supprimé.</Alert>
+    </Section>
   )
 }

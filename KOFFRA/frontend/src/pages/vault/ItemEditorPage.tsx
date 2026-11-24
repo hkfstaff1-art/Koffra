@@ -1,6 +1,9 @@
+import { ArrowLeft, Plus, Save, WandSparkles, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { Alert, Button, Field, PasswordInput, TextInput, errorMessage } from '../../components/ui'
+import { useFeedback } from '../../components/feedback'
+import { errorMessage } from '../../components/format'
+import { Alert, Button, Checkbox, EmptyState, Field, IconButton, PasswordInput, SelectField, TextArea, TextInput } from '../../components/ui'
 import { generatePassword } from '../../crypto'
 import { ApiError } from '../../services/api/client'
 import { useVault } from '../../features/vault/VaultProvider'
@@ -10,126 +13,194 @@ export function ItemEditorPage() {
   const { uuid } = useParams()
   const navigate = useNavigate()
   const vault = useVault()
+  const { toast, confirm } = useFeedback()
   const existing = uuid ? (vault.entries.find((e) => e.uuid === uuid) ?? null) : null
   const [data, setData] = useState<ItemData>(() => (existing ? structuredClone(existing.data) : emptyItem()))
   const [categoryUuid, setCategoryUuid] = useState<string | null>(existing?.categoryUuid ?? null)
   const [favorite, setFavorite] = useState(existing?.favorite ?? false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  if (uuid && !existing) return <p className="empty">Entrée introuvable.</p>
+  if (uuid && !existing) return <EmptyState icon={X} title="Entrée introuvable" />
 
   const type = ITEM_TYPES[data.type]
   const warnings = forbiddenDataWarnings(data)
   const setField = (key: string, value: string) => setData((d) => ({ ...d, fields: { ...d.fields, [key]: value } }))
+  const backTo = existing ? `/coffre/${existing.uuid}` : '/coffre'
+
+  function check(): Record<string, string> {
+    const e: Record<string, string> = {}
+    if (!data.title.trim()) e.title = 'Le titre est obligatoire.'
+    else if (data.title.length > 200) e.title = '200 caractères maximum.'
+    const url = data.fields.url?.trim()
+    if (url && !/^https?:\/\/\S+$/i.test(url)) e.url = 'Adresse invalide : commencez par https://'
+    const mail = data.fields.email?.trim()
+    if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) e.email = 'Adresse email invalide.'
+    data.custom.forEach((c, i) => {
+      if (!c.label.trim() && c.value) e[`custom-${i}`] = 'Donnez un nom à ce champ.'
+    })
+    return e
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (!data.title.trim()) return setError('Le titre est obligatoire.')
-    if (warnings.length && !window.confirm(`Attention : données interdites possibles (${warnings.join(', ')}). Ne stockez jamais de code PIN, CVV ou code OTP bancaire. Enregistrer quand même ?`)) return
+    const found = check()
+    setErrors(found)
+    if (Object.keys(found).length) return
+    if (
+      warnings.length &&
+      !(await confirm({
+        title: 'Données interdites possibles',
+        message: (
+          <>
+            <p>{warnings.join(' · ')}</p>
+            <p>Ne stockez jamais de code PIN, CVV ni code OTP bancaire. Enregistrer quand même ?</p>
+          </>
+        ),
+        confirmLabel: 'Enregistrer quand même',
+        tone: 'warning',
+      }))
+    )
+      return
     setBusy(true)
     setError(null)
     try {
       // Les champs vides ne sont pas conservés
       const fields = Object.fromEntries(Object.entries(data.fields).filter(([, v]) => v.trim() !== ''))
-      const saved = await vault.save({ existing, data: { ...data, title: data.title.trim(), fields }, categoryUuid, favorite })
+      const custom = data.custom.filter((c) => c.label.trim() || c.value)
+      const saved = await vault.save({ existing, data: { ...data, title: data.title.trim(), fields, custom }, categoryUuid, favorite })
+      toast('success', existing ? 'Modifications enregistrées (chiffrées).' : 'Entrée ajoutée au coffre (chiffrée).')
       navigate(`/coffre/${saved.uuid}`)
     } catch (err) {
-      setError(err instanceof ApiError && err.code === 'revision_conflict' ? `${err.message} (vos modifications n’ont pas été enregistrées)` : errorMessage(err))
+      setError(err instanceof ApiError && err.code === 'revision_conflict' ? `${err.message} Vos modifications n’ont pas été enregistrées.` : errorMessage(err))
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <form className="card detail stack" onSubmit={submit} aria-labelledby="editor-title">
-      <header className="pane-head">
-        <h2 id="editor-title">{existing ? 'Modifier l’entrée' : 'Nouvelle entrée'}</h2>
-        <Link to={existing ? `/coffre/${existing.uuid}` : '/coffre'} className="btn btn-ghost">
-          Annuler
+    <form className="card detail" onSubmit={submit} aria-labelledby="editor-title" noValidate>
+      <header className="detail-head">
+        <Link to={backTo} className="btn btn-ghost btn-sm back-link">
+          <ArrowLeft className="icon" aria-hidden /> Annuler
         </Link>
+        <h2 id="editor-title">{existing ? 'Modifier l’entrée' : 'Nouvelle entrée'}</h2>
       </header>
+
       {error ? <Alert kind="error">{error}</Alert> : null}
 
-      <Field label="Type">
-        {(id) => (
-          <select id={id} value={data.type} onChange={(e) => setData((d) => ({ ...d, type: e.target.value as ItemType }))} disabled={!!existing}>
-            {Object.entries(ITEM_TYPES).map(([k, t]) => (
-              <option key={k} value={k}>
-                {t.icon} {t.label}
-              </option>
-            ))}
-          </select>
-        )}
-      </Field>
-      {data.type === 'bank' ? (
-        <Alert kind="warning">Références non exploitables uniquement : ne saisissez jamais de code PIN, CVV, mot de passe de paiement ou code OTP bancaire.</Alert>
+      {!existing ? (
+        <fieldset className="type-picker">
+          <legend>Type d’entrée</legend>
+          <div className="type-grid">
+            {(Object.entries(ITEM_TYPES) as [ItemType, (typeof ITEM_TYPES)[ItemType]][]).map(([k, t]) => {
+              const Icon = t.icon
+              return (
+                <label key={k} className={`type-option ${data.type === k ? 'active' : ''}`}>
+                  <input type="radio" name="type" value={k} checked={data.type === k} onChange={() => setData((d) => ({ ...d, type: k }))} />
+                  <span className={`item-icon type-${k}`} aria-hidden>
+                    <Icon />
+                  </span>
+                  <span>{t.label}</span>
+                </label>
+              )
+            })}
+          </div>
+        </fieldset>
       ) : null}
 
-      <TextInput label="Titre" value={data.title} onChange={(e) => setData((d) => ({ ...d, title: e.target.value }))} required maxLength={200} />
+      {data.type === 'bank' ? (
+        <Alert kind="warning" title="Références non exploitables uniquement">
+          Ne saisissez jamais de code PIN, CVV, mot de passe de paiement ni code OTP bancaire.
+        </Alert>
+      ) : null}
 
-      {type.fields.map((f) =>
-        f.secret ? (
-          <div key={f.key} className="stack-tight">
-            <PasswordInput label={f.label} value={data.fields[f.key] ?? ''} onChange={(e) => setField(f.key, e.target.value)} />
-            {f.key === 'password' ? (
-              <Button variant="ghost" className="btn-small" onClick={async () => setField('password', await generatePassword())}>
-                🎲 Générer un mot de passe
-              </Button>
-            ) : null}
-          </div>
-        ) : f.multiline ? (
-          <Field key={f.key} label={f.label}>
-            {(id) => <textarea id={id} rows={3} value={data.fields[f.key] ?? ''} onChange={(e) => setField(f.key, e.target.value)} />}
-          </Field>
-        ) : (
-          <TextInput key={f.key} label={f.label} type={f.inputType ?? 'text'} value={data.fields[f.key] ?? ''} onChange={(e) => setField(f.key, e.target.value)} />
-        ),
-      )}
+      <div className="form-grid">
+        <div className="span-2">
+          <TextInput label="Titre" value={data.title} onChange={(e) => setData((d) => ({ ...d, title: e.target.value }))} error={errors.title} maxLength={200} required autoFocus={!existing} />
+        </div>
 
-      <Field label="Catégorie">
-        {(id) => (
-          <select id={id} value={categoryUuid ?? ''} onChange={(e) => setCategoryUuid(e.target.value || null)}>
-            <option value="">Sans catégorie</option>
-            {vault.categories.map((c) => (
-              <option key={c.uuid} value={c.uuid}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </Field>
+        {type.fields.map((f) => {
+          const value = data.fields[f.key] ?? ''
+          if (f.secret) {
+            return (
+              <div key={f.key} className={f.multiline ? 'span-2' : ''}>
+                <PasswordInput label={f.label} value={value} onChange={(e) => setField(f.key, e.target.value)} />
+                {f.key === 'password' ? (
+                  <Button variant="ghost" size="sm" icon={WandSparkles} onClick={async () => setField('password', await generatePassword())}>
+                    Générer un mot de passe robuste
+                  </Button>
+                ) : null}
+              </div>
+            )
+          }
+          if (f.multiline) {
+            return (
+              <div key={f.key} className="span-2">
+                <TextArea label={f.label} rows={3} value={value} onChange={(e) => setField(f.key, e.target.value)} />
+              </div>
+            )
+          }
+          return (
+            <TextInput
+              key={f.key}
+              label={f.label}
+              type={f.inputType ?? 'text'}
+              value={value}
+              onChange={(e) => setField(f.key, e.target.value)}
+              error={errors[f.key]}
+              placeholder={f.inputType === 'url' ? 'https://' : undefined}
+            />
+          )
+        })}
 
-      <fieldset className="stack-tight">
+        <SelectField label="Catégorie" value={categoryUuid ?? ''} onChange={(e) => setCategoryUuid(e.target.value || null)}>
+          <option value="">Sans catégorie</option>
+          {vault.categories.map((c) => (
+            <option key={c.uuid} value={c.uuid}>
+              {c.name}
+            </option>
+          ))}
+        </SelectField>
+      </div>
+
+      <fieldset className="custom-fields">
         <legend>Champs personnalisés</legend>
+        {data.custom.length === 0 ? <p className="muted small">Ajoutez des informations propres à cette entrée (n° client, question secrète…).</p> : null}
         {data.custom.map((c, i) => (
           <div key={i} className="custom-field">
-            <input aria-label="Nom du champ" placeholder="Nom" value={c.label} onChange={(e) => setData((d) => ({ ...d, custom: d.custom.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) }))} />
-            <input aria-label="Valeur" placeholder="Valeur" type={c.secret ? 'password' : 'text'} value={c.value} onChange={(e) => setData((d) => ({ ...d, custom: d.custom.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)) }))} />
-            <label className="checkbox">
-              <input type="checkbox" checked={c.secret} onChange={(e) => setData((d) => ({ ...d, custom: d.custom.map((x, j) => (j === i ? { ...x, secret: e.target.checked } : x)) }))} /> Secret
-            </label>
-            <Button variant="ghost" className="icon-btn" aria-label="Retirer le champ" onClick={() => setData((d) => ({ ...d, custom: d.custom.filter((_, j) => j !== i) }))}>
-              ✕
-            </Button>
+            <Field label="Nom du champ" error={errors[`custom-${i}`]}>
+              {(a) => <input {...a} value={c.label} onChange={(e) => setData((d) => ({ ...d, custom: d.custom.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) }))} />}
+            </Field>
+            <Field label="Valeur">
+              {(a) => (
+                <input {...a} type={c.secret ? 'password' : 'text'} autoComplete="off" value={c.value} onChange={(e) => setData((d) => ({ ...d, custom: d.custom.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)) }))} />
+              )}
+            </Field>
+            <Checkbox label="Secret" checked={c.secret} onChange={(e) => setData((d) => ({ ...d, custom: d.custom.map((x, j) => (j === i ? { ...x, secret: e.target.checked } : x)) }))} />
+            <IconButton icon={X} label="Retirer ce champ" onClick={() => setData((d) => ({ ...d, custom: d.custom.filter((_, j) => j !== i) }))} />
           </div>
         ))}
-        <Button variant="ghost" className="btn-small" onClick={() => setData((d) => ({ ...d, custom: [...d.custom, { label: '', value: '', secret: false }] }))}>
-          + Ajouter un champ
+        <Button variant="ghost" size="sm" icon={Plus} onClick={() => setData((d) => ({ ...d, custom: [...d.custom, { label: '', value: '', secret: false }] }))}>
+          Ajouter un champ
         </Button>
       </fieldset>
 
-      <Field label="Notes">{(id) => <textarea id={id} rows={4} value={data.notes} onChange={(e) => setData((d) => ({ ...d, notes: e.target.value }))} />}</Field>
+      <TextArea label="Notes" value={data.notes} onChange={(e) => setData((d) => ({ ...d, notes: e.target.value }))} />
 
-      <label className="checkbox">
-        <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} /> Favori
-      </label>
+      <Checkbox label="Ajouter aux favoris" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} />
 
-      {warnings.length ? <Alert kind="warning">Vérifiez : {warnings.join(' · ')}</Alert> : null}
+      {warnings.length ? <Alert kind="warning" title="À vérifier">{warnings.join(' · ')}</Alert> : null}
 
-      <Button type="submit" busy={busy}>
-        Enregistrer (chiffré)
-      </Button>
+      <footer className="form-actions">
+        <Link to={backTo} className="btn btn-secondary btn-md">
+          Annuler
+        </Link>
+        <Button type="submit" icon={Save} busy={busy}>
+          Enregistrer
+        </Button>
+      </footer>
     </form>
   )
 }
