@@ -5,12 +5,13 @@ import {
   prepareLogin,
   unlockAccount,
   unwrapVaultKey,
+  wipe,
   wrapVaultKey,
   type Envelope,
   type UnlockedAccount,
   type VaultKey,
 } from '../crypto'
-import { onUnauthorized } from '../services/api/client'
+import { ApiError, onUnauthorized } from '../services/api/client'
 import { koffra, type MeResponse } from '../services/api/koffra'
 
 /**
@@ -125,11 +126,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const unlock = useCallback(
     async (password: string) => {
-      const m = await koffra.me()
+      let m: MeResponse
+      try {
+        m = await koffra.me()
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 401) || !me) throw err
+        // La session serveur a expiré pendant que le coffre était verrouillé :
+        // reconnexion transparente avec le même mot de passe (appareil déjà approuvé).
+        const email = me.user.email
+        const { kdf_params } = await koffra.prelogin(email)
+        const keys = await prepareLogin(password, kdf_params)
+        const res = await koffra.login({ email, auth_key: keys.authKey, device_label: deviceLabel() })
+        if ('otp_required' in res) {
+          await wipe(keys.wrapKey)
+          await toAnonymous() // appareil à re-vérifier : retour à l'écran de connexion
+          return
+        }
+        await openSession(res, keys.wrapKey)
+        return
+      }
       const { wrapKey } = await prepareLogin(password, m.keys.kdf_params)
       await openSession(m, wrapKey)
     },
-    [openSession],
+    [me, openSession, toAnonymous],
   )
 
   const refresh = useCallback(async () => {

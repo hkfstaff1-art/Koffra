@@ -7,6 +7,7 @@ import { Alert, Button, PasswordInput, TextInput } from '../../components/ui'
 import { rules, validate, type FieldErrors } from '../../components/validation'
 import { prepareLogin, wipe } from '../../crypto'
 import { deviceLabel, useSession } from '../../app/session'
+import { ApiError } from '../../services/api/client'
 import { koffra, type MeResponse, type OtpRequired } from '../../services/api/koffra'
 import { AuthLayout } from './AuthLayout'
 
@@ -176,8 +177,8 @@ export function UnlockPage() {
     try {
       await unlock(password)
       setPassword('')
-    } catch {
-      setError('Mot de passe incorrect.')
+    } catch (err) {
+      setError(err instanceof ApiError ? errorMessage(err) : 'Mot de passe incorrect.')
     } finally {
       setBusy(false)
     }
