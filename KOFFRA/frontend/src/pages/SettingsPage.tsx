@@ -1,24 +1,22 @@
-import { DatabaseBackup, Download, Fingerprint, KeyRound, Lock, MonitorSmartphone, RefreshCcw, ShieldAlert, Timer, Upload, UserCog } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { Fingerprint, KeyRound, Lock, MonitorSmartphone, RefreshCcw, ScrollText, ShieldAlert, Timer, UserCog } from 'lucide-react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router'
-import { z } from 'zod'
 import { useFeedback } from '../components/feedback'
 import { errorMessage } from '../components/format'
-import { Alert, Button, Modal, PasswordInput, SelectField } from '../components/ui'
+import { Button, Modal, PasswordInput, SelectField } from '../components/ui'
 import { newPasswordSchema, rules, validate, type FieldErrors } from '../components/validation'
 import { changePassword, prepareLogin, publicKeyFingerprint, regenerateRecoveryKey, wipe } from '../crypto'
 import { useReauth } from '../app/reauth'
 import { useSession } from '../app/session'
 import { koffra, toApiPassword, toApiRecovery } from '../services/api/koffra'
-import { buildEncryptedExport, importEncryptedExport, rotateVaultKey } from '../features/vault/operations'
-import { useVault } from '../features/vault/VaultProvider'
+import { rotateVaultKey } from '../features/vault/operations'
 import { DemoDataSection } from '../features/vault/DemoData'
 import { RecoveryKeyNotice, StrengthMeter } from './auth/AuthLayout'
 
 const TABS = [
   { to: 'compte', label: 'Mon compte', icon: UserCog },
   { to: 'appareils', label: 'Appareils', icon: MonitorSmartphone },
-  { to: 'sauvegarde', label: 'Sauvegarde', icon: DatabaseBackup },
+  { to: 'journal', label: 'Journal d’audit', icon: ScrollText },
 ]
 
 /** Écran Paramètres : un seul endroit, organisé en onglets. */
@@ -88,6 +86,7 @@ export function AccountSettings() {
 
   return (
     <div className="settings-grid">
+      <div className="stack-lg">
       <PasswordChange
         busy={busy === 'password'}
         onSubmit={(current, next) =>
@@ -103,6 +102,8 @@ export function AccountSettings() {
           })
         }
       />
+      <VaultTools />
+      </div>
 
       <div className="stack-lg">
         <Section icon={Timer} title="Verrouillage automatique" description="Le coffre se verrouille aussi à la fermeture de l’onglet.">
@@ -160,12 +161,11 @@ export function AccountSettings() {
   )
 }
 
-/** Onglet « Sauvegarde » : export / restauration chiffrés et rotation de la clé du coffre. */
-export function BackupSettings() {
+/** Outils du coffre (onglet « Mon compte ») : données de test et rotation de la clé du coffre. */
+function VaultTools() {
   const { account, vaultKeys, currentKey, refresh } = useSession()
   const { withReauth } = useReauth()
   const { toast, confirm } = useFeedback()
-  const vault = useVault()
   const [busy, setBusy] = useState<string | null>(null)
   const [progress, setProgress] = useState('')
 
@@ -182,34 +182,8 @@ export function BackupSettings() {
   }
 
   return (
-    <div className="settings-grid">
+    <>
       <DemoDataSection />
-      <ExportImport
-        busy={busy}
-        progress={progress}
-        onExport={(passphrase) =>
-          run('export', async () => {
-            const file = await withReauth(() => buildEncryptedExport(vaultKeys, passphrase))
-            const url = URL.createObjectURL(new Blob([JSON.stringify(file)], { type: 'application/json' }))
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `koffra-export-${new Date().toISOString().slice(0, 10)}.koffra.json`
-            a.click()
-            URL.revokeObjectURL(url)
-            toast('success', 'Export chiffré téléchargé. Conservez la phrase d’export séparément du fichier.')
-          })
-        }
-        onImport={(file, passphrase) =>
-          run('import', async () => {
-            if (!currentKey) throw new Error('Coffre non accessible.')
-            const parsed: unknown = JSON.parse(await file.text())
-            const res = await importEncryptedExport(parsed, passphrase, currentKey, (d, t) => setProgress(`${d}/${t}`))
-            await vault.reload()
-            toast('success', `Import terminé : ${res.items} entrée(s), ${res.categories} catégorie(s).`)
-          })
-        }
-      />
-
       <Section icon={RefreshCcw} title="Rotation de la clé du coffre" description="Recommandée après la désactivation d’un administrateur : toutes les données sont re-chiffrées avec une nouvelle clé.">
         {progress && busy === 'rotation' ? (
           <div className="progress" role="status">
@@ -245,7 +219,7 @@ export function BackupSettings() {
           </Button>
         </div>
       </Section>
-    </div>
+    </>
   )
 }
 
@@ -281,68 +255,3 @@ function PasswordChange({ busy, onSubmit }: { busy: boolean; onSubmit: (current:
   )
 }
 
-const exportSchema = z.object({ passphrase: z.string().min(12, 'Au moins 12 caractères.') })
-
-function ExportImport({ busy, progress, onExport, onImport }: { busy: string | null; progress: string; onExport: (p: string) => void; onImport: (f: File, p: string) => void }) {
-  const [exportPass, setExportPass] = useState('')
-  const [importPass, setImportPass] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [errors, setErrors] = useState<{ export?: string; import?: string; file?: string }>({})
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  return (
-    <>
-      <Section icon={Download} title="Exporter le coffre" description="Fichier chiffré par une phrase que vous choisissez. Les pièces jointes sont couvertes par la sauvegarde du serveur.">
-        <form
-          className="stack"
-          noValidate
-          onSubmit={(e) => {
-            e.preventDefault()
-            const invalid = validate(exportSchema, { passphrase: exportPass })
-            setErrors({ export: invalid?.passphrase })
-            if (!invalid) onExport(exportPass)
-          }}
-        >
-          <PasswordInput label="Phrase d’export" value={exportPass} onChange={(e) => setExportPass(e.target.value)} error={errors.export} hint="12 caractères minimum. Conservez-la séparément du fichier." autoComplete="new-password" />
-          <div>
-            <Button type="submit" variant="secondary" icon={Download} busy={busy === 'export'}>
-              Télécharger l’export chiffré
-            </Button>
-          </div>
-        </form>
-      </Section>
-
-      <Section icon={Upload} title="Restaurer un export" description="Les entrées restaurées s’ajoutent au coffre existant ; rien n’est supprimé.">
-        <form
-          className="stack"
-          noValidate
-          onSubmit={(e) => {
-            e.preventDefault()
-            setErrors({ file: file ? undefined : 'Choisissez un fichier d’export.', import: importPass ? undefined : 'Saisissez la phrase de cet export.' })
-            if (file && importPass) onImport(file, importPass)
-          }}
-        >
-          <div className="field">
-            <label htmlFor="import-file">Fichier d’export (.koffra.json)</label>
-            <div className="file-picker">
-              <Button variant="secondary" size="sm" icon={Upload} onClick={() => fileRef.current?.click()}>
-                Choisir un fichier
-              </Button>
-              <span className="muted small">{file ? file.name : 'Aucun fichier choisi'}</span>
-              <input id="import-file" ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-            </div>
-            {errors.file ? <p className="field-error">{errors.file}</p> : null}
-          </div>
-          <PasswordInput label="Phrase de l’export" value={importPass} onChange={(e) => setImportPass(e.target.value)} error={errors.import} autoComplete="off" />
-          {progress && busy === 'import' ? <div className="progress" role="status">Import : {progress}</div> : null}
-          <div>
-            <Button type="submit" variant="secondary" icon={Upload} busy={busy === 'import'}>
-              Restaurer dans ce coffre
-            </Button>
-          </div>
-        </form>
-        <Alert kind="info">Conservez vos exports hors de cet appareil (clé USB chiffrée, coffre physique).</Alert>
-      </Section>
-    </>
-  )
-}

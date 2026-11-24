@@ -50,7 +50,7 @@ export function ActivityPage() {
 
   return (
     <div className="stack-lg">
-      <PageHeader title="Journal d’audit" description="Connexions, appareils et modifications. Aucune valeur secrète n’est jamais journalisée." />
+      <PageHeader level={2} title="Journal d’audit" description="Connexions, appareils et modifications. Aucune valeur secrète n’est jamais journalisée." />
       <div className="card table-card">
       {log.isPending ? <Spinner /> : null}
       <table className="table">

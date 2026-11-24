@@ -3,7 +3,6 @@ import {
   ArrowRight,
   CalendarClock,
   CheckCircle2,
-  DatabaseBackup,
   KeyRound,
   LogIn,
   MonitorSmartphone,
@@ -64,8 +63,8 @@ function StatCard({ icon: Icon, tone, value, label, note }: { icon: LucideIcon; 
 const QUICK: { to: string; label: string; icon: LucideIcon }[] = [
   { to: '/coffre/nouveau', label: 'Nouvelle entrée', icon: Plus },
   { to: '/administrateurs', label: 'Gérer les administrateurs', icon: Users },
-  { to: '/parametres/sauvegarde', label: 'Sauvegarde', icon: DatabaseBackup },
-  { to: '/journal', label: 'Consulter le journal', icon: ScrollText },
+  { to: '/coffre', label: 'Ouvrir le coffre', icon: LockKeyhole },
+  { to: '/parametres/journal', label: 'Journal d’audit', icon: ScrollText },
   { to: '/parametres/appareils', label: 'Mes appareils', icon: MonitorSmartphone },
   { to: '/parametres/compte', label: 'Mon compte', icon: UserCog },
 ]
@@ -127,7 +126,7 @@ export function DashboardPage() {
         <section className="card dash-card">
           <header className="dash-card-head">
             <h2>Activités récentes</h2>
-            <Link to="/journal" className="see-all">
+            <Link to="/parametres/journal" className="see-all">
               Voir tout <ArrowRight className="icon-sm" aria-hidden />
             </Link>
           </header>

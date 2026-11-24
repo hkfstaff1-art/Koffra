@@ -1,4 +1,4 @@
-import { ChevronDown, Download, LayoutDashboard, Lock, LogOut, Menu, ScrollText, Search, Settings, Users, LockKeyhole, X, type LucideIcon } from 'lucide-react'
+import { ChevronDown, Download, LayoutDashboard, Lock, LogOut, Menu, Search, Settings, Users, LockKeyhole, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useInstallApp } from '../components/InstallPrompt'
@@ -17,7 +17,6 @@ const NAV: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
   { to: '/', label: 'Tableau de bord', icon: LayoutDashboard, end: true },
   { to: '/coffre', label: 'Coffre', icon: LockKeyhole },
   { to: '/administrateurs', label: 'Administrateurs', icon: Users },
-  { to: '/journal', label: 'Journal d’audit', icon: ScrollText },
   { to: '/parametres', label: 'Paramètres', icon: Settings },
 ]
 

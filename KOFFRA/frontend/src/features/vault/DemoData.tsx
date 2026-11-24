@@ -74,7 +74,7 @@ export function useDemoData() {
   return { demoCount: demoEntries.length, busy, progress, seed, remove }
 }
 
-/** Carte « Données de test » (Paramètres → Sauvegarde). */
+/** Carte « Données de test » (Paramètres → Mon compte). */
 export function DemoDataSection() {
   const { demoCount, busy, progress, seed, remove } = useDemoData()
 

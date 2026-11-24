@@ -9,7 +9,7 @@ import { ActivityPage } from '../pages/ActivityPage'
 import { AdminsPage } from '../pages/AdminsPage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { DevicesPage } from '../pages/DevicesPage'
-import { AccountSettings, BackupSettings, SettingsLayout } from '../pages/SettingsPage'
+import { AccountSettings, SettingsLayout } from '../pages/SettingsPage'
 import { InstallPage } from '../pages/auth/InstallPage'
 import { InvitationPage } from '../pages/auth/InvitationPage'
 import { LoginPage, UnlockPage } from '../pages/auth/LoginPage'
@@ -63,11 +63,11 @@ function PrivateRoutes() {
               <Route path="compte" element={<AccountSettings />} />
               <Route path="appareils" element={<DevicesPage />} />
               <Route path="administrateurs" element={<Navigate to="/administrateurs" replace />} />
-              <Route path="journal" element={<Navigate to="/journal" replace />} />
-              <Route path="sauvegarde" element={<BackupSettings />} />
+              <Route path="journal" element={<ActivityPage />} />
+              <Route path="sauvegarde" element={<Navigate to="/parametres/compte" replace />} />
             </Route>
             <Route path="administrateurs" element={<div className="page"><AdminsPage /></div>} />
-            <Route path="journal" element={<div className="page"><ActivityPage /></div>} />
+            <Route path="journal" element={<Navigate to="/parametres/journal" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
