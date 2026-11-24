@@ -1,6 +1,9 @@
 # KOFFRA : « / » doit toujours passer par Laravel (qui sert l'application React).
 DirectoryIndex index.php
 
+# Manifeste de l'application installable (PWA)
+AddType application/manifest+json .webmanifest
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
